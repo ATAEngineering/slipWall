@@ -1,0 +1,286 @@
+// Copyright (C) 2022, ATA Engineering, Inc.
+// 
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 3 of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+// 
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program; if not, see
+// <https://www.gnu.org/licenses/lgpl-3.0.html>.
+
+#include <Loci>
+#include "read_grid.h"
+#include "bctools.h"
+#include "qvi.h"
+#include "chemio.h"
+
+#include <vector>
+#include <string>
+#include <iostream>
+#include <fstream>
+
+//#include "transport_db.h"
+//#include "turb_param.h"
+$include "chem.lh"
+
+using std::cout;
+using std::cerr;
+using std::endl;
+
+// print version when module is loaded
+namespace {
+  class PrintOnConstruct {
+  public:
+    PrintOnConstruct() {
+      if (Loci::MPI_rank == 0) {
+        cout << "CHEM slipWall version: 1.0.0 compiled on " << __DATE__
+             << " " << __TIME__ << endl;
+      }
+    }
+  };
+  PrintOnConstruct Instance;
+}
+
+
+// Set up boundary condition
+namespace chem {
+  // boundary condition checking
+  class slipWallBC_check : public BC_Check {
+    // This will contain the error message when an error is present
+    std::string error_message;
+
+   public:
+    // This contains a list of boundary conditions that this checker will
+    // check. If there are more than one, put commas between them.
+    std::string boundaryConditions() { return "viscousWall"; }
+
+    // Variables that will be involved with the check
+    std::string variablesChecked() { 
+      return "slip,u_slip_coeff,T_slip_coeff,Tv_slip_coeff,Twall"; 
+    }
+
+    // Check all the options given to viscousWall
+    bool checkOptions(const options_list &bc_options) {
+      auto check = true;
+      const auto haveTwall = bc_options.optionExists("Twall");
+      const auto haveSlip = bc_options.optionExists("slip");
+
+      if (haveSlip && (bc_options.optionExists("u_slip_coeff") ||
+                       bc_options.optionExists("T_slip_coeff") ||
+                       bc_options.optionExists("Tv_slip_coeff"))) {
+          error_message +=
+              "must specify 'slip' to set a slip coefficient'\n";
+          check = false;
+      }
+
+      if (bc_options.optionExists("T_slip_coeff")) {
+        // check that wall is isothermal
+        if (!haveTwall) {
+          error_message +=
+              "'T_slip_coeff' must be specified with 'Twall'\n";
+          check = false;
+        }
+        // check that there are no units
+        if (!check_scalar_units(bc_options, "T_slip_coeff", "")) {
+          error_message += "Units are not supported for 'T_slip_coeff'\n";
+          check = false;
+        }
+      }
+
+      if (bc_options.optionExists("Tv_slip_coeff")) {
+        // check that wall is isothermal
+        if (!haveTwall) {
+          error_message +=
+              "'Tv_slip_coeff' must be specified with 'Twall'\n";
+          check = false;
+        }
+        // check that there are no units
+        if (!check_scalar_units(bc_options, "Tv_slip_coeff", "")) {
+          error_message += "Units are not supported for 'Tv_slip_coeff'\n";
+          check = false;
+        }
+      }
+
+      return check;
+    }
+
+    std::ostream &ErrorMessage(std::ostream &s) {
+      s << error_message << endl;
+      return s;
+    }
+  };
+
+  // Register the bc check
+  register_BC<slipWallBC_check> register_BC_slipWallBC_check;
+
+  // ------------------------------------------------------------------
+  $type slip_BCoption Constraint;
+
+  $type sigma_u_slip_BC store<real>;
+  $type sigma_T_slip_BC store<real>;
+  $type sigma_Tv_slip_BC store<real>;
+  $rule pointwise(sigma_u_slip_BC, sigma_T_slip_BC, sigma_Tv_slip_BC <- BC_options), 
+      constraint(slip_BCoption) {
+    // set default values
+    $sigma_u_slip_BC = 0.85;
+    $sigma_T_slip_BC = 0.85;
+    $sigma_Tv_slip_BC = 0.001;
+
+    if ($BC_options.optionExists("u_slip_coeff")) {
+      $BC_options.getOption("u_slip_coeff", $sigma_u_slip_BC);
+    }
+
+    if ($BC_options.optionExists("T_slip_coeff")) {
+      $BC_options.getOption("T_slip_coeff", $sigma_T_slip_BC);
+    }
+
+    if ($BC_options.optionExists("Tv_slip_coeff")) {
+      $BC_options.getOption("Tv_slip_coeff", $sigma_Tv_slip_BC);
+    }
+  }
+
+  $type sigma_u_slip store<real>;
+  $type sigma_T_slip store<real>;
+  $type sigma_Tv_slip store<real>;
+  $rule pointwise(sigma_u_slip, sigma_T_slip, sigma_Tv_slip <- 
+      ref->(sigma_u_slip_BC, sigma_T_slip_BC, sigma_Tv_slip_BC)), 
+      constraint(ref->slip_BCoption) {
+    $sigma_u_slip = $ref->$sigma_u_slip_BC;
+    $sigma_T_slip = $ref->$sigma_T_slip_BC;
+    $sigma_Tv_slip = $ref->$sigma_Tv_slip_BC;
+  }
+
+  $type slipDelay param<int>;
+  $rule default(slipDelay) { $slipDelay = 0; }
+
+  $type slipRelaxation param<real>;
+  $rule default(slipRelaxation) { $slipRelaxation = 1.0; }
+
+  $type mfp store<real>;  // mean free path
+  $type mfp_f store<real>;
+  $rule pointwise(mfp <- muu, rho, temperature, eos_state) {
+    $mfp = $muu / $rho * sqrt(M_PI / (2. * $eos_state.gasConstant() * $temperature));
+  }
+
+  $rule pointwise(mfp_f <- muu_f, rho_f, temperature_f, mixture_f, eos,
+                  gaugePressure_f, Pambient), constraint(ci) {
+    const auto p = $gaugePressure_f + $Pambient;
+    auto s = $eos.State_from_mixture_p_T($mixture_f, p, $temperature_f);
+    const auto R = s.gasConstant();
+    $mfp_f = $muu_f / $rho_f * sqrt(M_PI / (2. * R * $temperature_f));    
+  }
+
+  OUTPUT_SCALAR("cell2node(mfp)", mfp);
+
+  $type T_slip_lag store<real>;
+  $rule pointwise(T_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption) {
+    $T_slip_lag{n=0} = $Twall;
+  }
+
+  $rule pointwise(T_slip_lag{n+1} <- temperature_f{n,it}, T_slip_lag{n}), constraint(ref->slip_BCoption),
+    conditional(newton_finished{n,it}) {
+    $T_slip_lag{n+1} = $temperature_f{n,it};
+  }
+
+  $type u_slip_lag store<vect3d>;
+  $rule pointwise(u_slip_lag{n=0} <- wallVelocity), constraint(ref->slip_BCoption) {
+    $u_slip_lag{n=0} = $wallVelocity;
+  }
+
+  $rule pointwise(u_slip_lag{n+1} <- u_f{n,it}, u_slip_lag{n}), constraint(ref->slip_BCoption),
+    conditional(newton_finished{n,it}) {
+    $u_slip_lag{n+1} = $u_f{n,it};
+  }
+
+  $rule pointwise(slip::temperature_f, slip::gaugePressure_f,
+                  slip::mixture_f, slip::u_f <- us,
+                  area, Twall, eos, wallVelocity, Pambient,
+                  ci->(mixture, gaugePressure, u, muu, kconduct, 
+                       temperature, cellcenter), slipDelay, ncycle,
+                  sigma_u_slip, sigma_T_slip, facecenter, T_slip_lag, 
+                  u_slip_lag, slipRelaxation),
+      constraint(ref->slip_BCoption), prelude {
+    $mixture_f.setVecSize($mixture.vecSize());
+  } compute {
+    // no-slip bc conditions
+    $mixture_f = $ci->$mixture;
+    $gaugePressure_f = $ci->$gaugePressure;
+    $temperature_f = $Twall;
+    const auto uwall = $wallVelocity;
+    $u_f = uwall - dot(uwall, $area.n) * $area.n + $us;
+
+    if ($ncycle >= $slipDelay) {  // use slip bc
+      const auto p = $ci->$gaugePressure + $Pambient;
+      auto s = $eos.State_from_mixture_p_T($mixture_f, p, $ci->$temperature);
+      //auto s = $eos.State_from_mixture_p_T($mixture_f, p, $T_slip_lag);
+      const auto R = s.gasConstant();
+      const auto rho = s.density();
+
+      // tangent vector
+      const auto u_normal = dot($ci->$u, $area.n) * $area.n;
+      const auto u_tangential = $ci->$u - u_normal;
+
+      // wall tangential velocity
+      // this distance calculation results in a better BC than
+      // only considering the normal component
+      const auto dist = norm($facecenter - $ci->$cellcenter); 
+      const auto u_coeff = (2.0 - $sigma_u_slip) / $sigma_u_slip;
+      const auto mfp = u_coeff *
+          $ci->$muu / rho * sqrt(M_PI / (2. * R * $ci->$temperature));
+      const auto u_slip = mfp * u_tangential / (mfp + dist) + $u_f;
+      $u_f = $u_slip_lag + (u_slip - $u_slip_lag) * $slipRelaxation;
+
+      // wall temperature
+      const auto T_coeff = (2.0 - $sigma_T_slip) / $sigma_T_slip;
+      const auto cpfac = 2.0 / (s.cpt() + s.cvt());
+      const auto tmfp = T_coeff * cpfac *
+          $ci->$kconduct / rho * sqrt(M_PI / (2. * R * $ci->$temperature));
+      const auto T_slip = ($Twall * dist + tmfp * $ci->$temperature) / (tmfp + dist);
+      $temperature_f = $T_slip_lag + (T_slip - $T_slip_lag) * $slipRelaxation;
+    }
+  }
+
+  $type Tv store<real>;
+  $type Tv_f store<real>;
+  $type kcond_vib store<real>;
+  $type cp_vib store<real>;
+
+  $type Tv_slip_lag store<real>;
+  $rule pointwise(Tv_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption) {
+    $Tv_slip_lag{n=0} = $Twall;
+  }
+
+  $rule pointwise(Tv_slip_lag{n+1} <- Tv_f{n,it}, Tv_slip_lag{n}), constraint(ref->slip_BCoption),
+    conditional(newton_finished{n,it}) {
+    $Tv_slip_lag{n+1} = $Tv_f{n,it};
+  }
+
+  $rule pointwise(slip::noslip::Tv_f <- area, mixture_f, gaugePressure_f, temperature_f,
+                  rho_f, Twall, ci->(kcond_vib, cp_vib, Tv, cellcenter), Tv_slip_lag,
+                  eos, Pambient, sigma_Tv_slip, facecenter, slipDelay, slipRelaxation, ncycle),
+      constraint(ref->slip_BCoption) {
+    $Tv_f = $temperature_f;  // no-slip bc
+    if ($ncycle >= $slipDelay) {  // use slip bc
+      const auto p = $gaugePressure_f + $Pambient;
+      auto s = $eos.State_from_mixture_p_T($mixture_f, p, $temperature_f);
+      const auto R = s.gasConstant();
+
+      // wall vibrational temperature
+      // this distance calculation results in a better BC than
+      // only considering the normal component
+      const auto dist = norm($facecenter - $ci->$cellcenter);
+      const auto Tv_coeff = (2.0 - $sigma_Tv_slip) / $sigma_Tv_slip;
+      const auto mfp = Tv_coeff * $ci->$kcond_vib / 
+          ($rho_f * $ci->$cp_vib) * sqrt(M_PI / (2. * R * $temperature_f));
+      const auto Tv_slip = ($Twall * dist + mfp * $ci->$Tv) / (dist + mfp);
+      $Tv_f = $Tv_slip_lag + (Tv_slip - $Tv_slip_lag) * $slipRelaxation;
+    }
+  }
+
+}
