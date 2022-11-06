@@ -184,7 +184,7 @@ namespace chem {
   }
 
   $rule pointwise(T_slip_lag{n+1} <- temperature_f{n,it}, T_slip_lag{n}), constraint(ref->slip_BCoption),
-    conditional(newton_finished{n,it}) {
+    conditional(newton_finished) {
     $T_slip_lag{n+1} = $temperature_f{n,it};
   }
 
@@ -194,7 +194,7 @@ namespace chem {
   }
 
   $rule pointwise(u_slip_lag{n+1} <- u_f{n,it}, u_slip_lag{n}), constraint(ref->slip_BCoption),
-    conditional(newton_finished{n,it}) {
+    conditional(newton_finished) {
     $u_slip_lag{n+1} = $u_f{n,it};
   }
 
@@ -257,7 +257,7 @@ namespace chem {
   }
 
   $rule pointwise(Tv_slip_lag{n+1} <- Tv_f{n,it}, Tv_slip_lag{n}), constraint(ref->slip_BCoption),
-    conditional(newton_finished{n,it}) {
+    conditional(newton_finished) {
     $Tv_slip_lag{n+1} = $Tv_f{n,it};
   }
 
