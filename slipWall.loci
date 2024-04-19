@@ -184,7 +184,13 @@ namespace chem {
   $rule pointwise(T_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption) {
     $T_slip_lag{n=0} = $Twall;
   }
+  $rule pointwise(radEq::T_slip_lag{n=0} <- ci->Tg_ic),
+    constraint(ref->slip_BCoption, ref->radiativeAdiabatic_BCoption) {
+    $T_slip_lag{n=0} = $ci->$Tg_ic;
+  }
 
+
+  
   $rule pointwise(T_slip_lag{n+1} <- temperature_f{n,it}, T_slip_lag{n}), 
       constraint(ref->slip_BCoption), conditional(newton_finished{n,it}) {
     $T_slip_lag{n+1} = $temperature_f{n,it};
@@ -201,29 +207,29 @@ namespace chem {
     $u_slip_lag{n+1} = $u_f{n,it};
   }
 
-  $type haveReactingChar param<int>;
-  $rule unit(haveReactingChar), constraint(area) { $haveReactingChar = 0; }
+  $type haveReactingOrChar param<int>;
+  $rule unit(haveReactingOrChar), constraint(boundary_faces) { $haveReactingOrChar = 0; }
 
-  $rule apply(haveReactingChar <- area)[Loci::Maximum], 
+  $rule apply(haveReactingOrChar <- ci)[Loci::Maximum], 
       constraint(ref->slip_BCoption) {
-    join($haveReactingChar, 0);
+    join($haveReactingOrChar, 0);
   }
 
-  $rule apply(haveReactingChar <- area)[Loci::Maximum], 
+  $rule apply(haveReactingOrChar <- ci)[Loci::Maximum], 
       constraint(ref->reacting_BCoption) {
-    join($haveReactingChar, 1);
+    join($haveReactingOrChar, 1);
   }
 
   $type charFaces store<bool>;
   $type haveSurfaceReactions Constraint;
-  $rule apply(haveReactingChar <- area)[Loci::Maximum], 
+  $rule apply(haveReactingOrChar <- ci)[Loci::Maximum], 
       constraint(charFaces, haveSurfaceReactions) {
-    join($haveReactingChar, 1);
+    join($haveReactingOrChar, 1);
   }
 
-  $type noReactingChar Constraint;
-  $rule constraint(noReactingChar <- haveReactingChar) {
-    $noReactingChar = $haveReactingChar ? EMPTY : ~EMPTY;
+  $type noReactingOrChar Constraint;
+  $rule constraint(noReactingOrChar <- haveReactingOrChar) {
+    $noReactingOrChar = $haveReactingOrChar ? EMPTY : ~EMPTY;
   }
 
   void compute_slip_conditions(
@@ -269,7 +275,7 @@ namespace chem {
                        temperature, cellcenter), slipDelay, ncycle,
                   sigma_u_slip, sigma_T_slip, facecenter, T_slip_lag, 
                   u_slip_lag, slipRelaxation),
-      constraint(ref->slip_BCoption, noReactingChar), prelude {
+      constraint(ref->slip_BCoption, noReactingOrChar), prelude {
     $mixture_f.setVecSize($mixture.vecSize());
   } compute {
     // no-slip bc conditions
@@ -355,7 +361,13 @@ namespace chem {
   $rule pointwise(Tv_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption) {
     $Tv_slip_lag{n=0} = $Twall;
   }
+  $rule pointwise(radEq::Tv_slip_lag{n=0} <- ci->Tg_ic),
+    constraint(ref->slip_BCoption, ref->radiativeAdiabatic_BCoption) {
+    $Tv_slip_lag{n=0} = $ci->$Tg_ic;
+  }
 
+
+  
   $rule pointwise(Tv_slip_lag{n+1} <- Tv_f{n,it}, Tv_slip_lag{n}), 
     constraint(ref->slip_BCoption),  conditional(newton_finished{n,it}) {
     $Tv_slip_lag{n+1} = $Tv_f{n,it};
