@@ -53,6 +53,7 @@ build_module:
     - pwd
     - ls -lh
     - env
+    - git config --global --add safe.directory `pwd`
     - scl enable gcc-toolset-${GCC_VERSION} 'bash ci/build_module ${MAX_PROCS}'
   # Use artifacts to return logs and other files to GitLab (if necessary)
   artifacts:
@@ -74,7 +75,6 @@ download_modules:
     - ls -lh
     - tar zxvf ${TNE_PACKAGENAME}-${TNE_VERSION}.tar.gz
     - tar zxvf ${PLASMA_PACKAGENAME}-${PLASMA_VERSION}.tar.gz
-    - tar zxvf ${ABLATIONLIB_PACKAGENAME}-${ABLATIONLIB_VERSION}.tar.gz
     - ls -lh
   artifacts:
     paths:
