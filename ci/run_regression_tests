@@ -6,7 +6,7 @@ ls -lh
 echo "LOCI_BASE" $LOCI_BASE
 echo "CHEM_BASE" $CHEM_BASE
 echo "CHEMISTRY_DATABASE" $CHEMISTRY_DATABASE
-export LOCI_MODULE_PATH=$cwd/src:$cwd/modules:$cwd/modules/tne/lib
+export LOCI_MODULE_PATH=$cwd:$cwd/modules:$cwd/modules/tne/lib
 export LD_LIBRARY_PATH=$LOCI_MODULE_PATH:$LD_LIBRARY_PATH
 export COLLISION_INTEGRAL_DATABASE=$cwd/modules/collisionIntegrals
 export OMPI_MCA_btl_vader_single_copy_mechanism=none
