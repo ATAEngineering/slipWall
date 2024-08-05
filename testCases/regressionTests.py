@@ -217,9 +217,9 @@ def main():
   double_cone.SetRunDirectory("double_cone")
   double_cone.SetNumberOfProcessors(maxProcs)
   double_cone.SetNumberOfIterations(200)
-  truthData = {os.path.join("output", "resid.dat"): [748.6393634, 4263865966.0, 897653.7495],
-               os.path.join("output", "ev_resid.dat"): [55127312.79],
-               "wprobe1.dat" : [724.47075048611, 331466.80923554]}
+  truthData = {os.path.join("output", "resid.dat"): [715.655142, 4277818655.0, 870682.3647],
+               os.path.join("output", "ev_resid.dat"): [36391873.11],
+               "wprobe1.dat" : [871.15356992501, 156260.41105801]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        os.path.join("output", "ev_resid.dat"): [1],
                        "wprobe1.dat": [2, 4]}
