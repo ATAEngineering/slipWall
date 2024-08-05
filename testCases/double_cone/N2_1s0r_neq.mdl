@@ -1,0 +1,7 @@
+// set mass fractions (mf) to desired initial values (must sum to 1)
+species = {
+N2 : < mf = 1.0 > ;
+} ;
+
+reactions = {
+} ;
