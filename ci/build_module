@@ -6,4 +6,4 @@ echo "LOCI_BASE" $LOCI_BASE
 echo "CHEM_BASE" $CHEM_BASE
 which extract
 which chem
-make -j `nproc`
+make -j ${1}

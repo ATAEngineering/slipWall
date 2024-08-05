@@ -39,7 +39,27 @@ LIB_OBJS=$(LOCI_OBJS:.o=_lo.o)
 
 all: $(MODULE_NAME)_m.so
 
-$(MODULE_NAME)_m.so: $(LIB_OBJS) $(OBJS)
+GITCHECK = $(shell git status | head -n 1)
+TEST = $(findstring fatal,$(GITCHECK))
+VERSTRING = unknown
+ifeq (branch,$(TEST))
+	VERSTRING = unknown
+	$(info This is NOT a git repository)
+else
+	VERSTRING = $(shell git describe --tags)
+endif
+
+version: 
+	$(info Creating version string)
+	@echo '#ifndef MODULEVERSION' >> version.hpp
+	@echo -n '#define MODULEVERSION "' >> version.hpp
+	$(info version is ${VERSTRING})
+	@echo -n $(VERSTRING) >> version.hpp
+	@echo '"' >> version.hpp
+	@echo '#endif' >> version.hpp
+	$(info done with versioning)
+
+$(MODULE_NAME)_m.so: $(LIB_OBJS) $(OBJS) version
 	$(SHARED_LD) $(SHARED_LD_FLAGS) $(MODULE_NAME)_m.so $(LIB_FLAGS) $(LIB_OBJS) $(OBJS)
 
 FRC : 
@@ -54,7 +74,7 @@ LOCI_FILES = $(wildcard *.loci)
 LOCI_LPP_FILES = $(LOCI_FILES:.loci=.cc)
 
 distclean: 
-	rm $(DEPEND_FILES)
+	rm $(DEPEND_FILES) version.hpp
 	rm -fr $(LOCI_OBJS) $(OBJS) $(LIB_OBJS) $(MODULE_NAME)_m.so $(JUNK) $(LOCI_LPP_FILES)
 
 # dependencies
