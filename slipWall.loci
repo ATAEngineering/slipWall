@@ -28,6 +28,7 @@
 //#include "transport_db.h"
 //#include "turb_param.h"
 $include "chem.lh"
+#include "version.hpp"
 
 using std::cout;
 using std::cerr;
@@ -39,8 +40,8 @@ namespace {
   public:
     PrintOnConstruct() {
       if (Loci::MPI_rank == 0) {
-        cout << "CHEM slipWall version: 1.0.0 compiled on " << __DATE__
-             << " " << __TIME__ << endl;
+        cout << "slipWall version: " << MODULEVERSION << " compiled on "
+             << __DATE__ << " " << __TIME__ << endl;
       }
     }
   };

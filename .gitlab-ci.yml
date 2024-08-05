@@ -1,0 +1,137 @@
+# This file is a template, and might need editing before it works on your project.
+# This is a sample GitLab CI/CD configuration file that should run without any modifications.
+# It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
+# it uses echo commands to simulate the pipeline execution.
+#
+# A pipeline is composed of independent jobs that run scripts, grouped into stages.
+# Stages run in sequential order, but jobs within stages run in parallel.
+#
+# For more information, see: https://docs.gitlab.com/ee/ci/yaml/index.html#stages
+#
+# You can copy and paste this template into a new `.gitlab-ci.yml` file.
+# You should not add this template to an existing `.gitlab-ci.yml` file by using the `include:` keyword.
+#
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+
+variables:
+  GCC_VERSION: 13
+  MODULE_NAME: 'slipWall'
+  BUILD_IMAGE: "$CI_REGISTRY/containers/chem:4.0-p10-gcc13"
+  VERSION: ${CI_COMMIT_TAG}
+  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${MODULE_NAME}/${VERSION}"
+  TNE_PACKAGENAME: "tne"
+  TNE_VERSION: "1.3.3"
+  TNE_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${TNE_PACKAGENAME}/packages/generic/${TNE_PACKAGENAME}/${TNE_VERSION}"
+  PLASMA_PACKAGENAME: "plasma"
+  PLASMA_VERSION: "1.2.1"
+  PLASMA_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${PLASMA_PACKAGENAME}/packages/generic/${PLASMA_PACKAGENAME}/${PLASMA_VERSION}"
+  WALLPROBE_PACKAGENAME: "wallProbe"
+  WALLPROBE_VERSION: "1.0.1"
+  WALLPROBE_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${WALLPROBE_PACKAGENAME}/packages/generic/${WALLPROBE_PACKAGENAME}/${WALLPROBE_VERSION}/${WALLPROBE_PACKAGENAME}_m.so"
+  MAX_PROCS: "4"
+
+default:
+  image: "$BUILD_IMAGE"
+  tags:
+  - linux
+
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - quality_check
+  - download
+  - test
+  - upload
+  - release
+
+build_module:
+  stage: build
+  script:
+    - whoami
+    - pwd
+    - ls -lh
+    - env
+    - scl enable gcc-toolset-${GCC_VERSION} 'bash ci/build_module ${MAX_PROCS}'
+  # Use artifacts to return logs and other files to GitLab (if necessary)
+  artifacts:
+    paths:
+      - slipWall_m.so
+      - version.hpp
+
+download_modules:
+  stage: download
+  script:
+    - echo ${TNE_PACKAGE_REGISTRY_URL} ${TNE_PACKAGENAME} ${TNE_VERSION}
+    - echo ${PLASMA_PACKAGE_REGISTRY_URL} ${PLASMA_PACKAGENAME} ${PLASMA_VERSION}
+    - echo ${WALLPROBE_PACKAGE_REGISTRY_URL}
+    - mkdir modules
+    - cd modules
+    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${TNE_PACKAGE_REGISTRY_URL}/${TNE_PACKAGENAME}-${TNE_VERSION}.tar.gz'
+    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${PLASMA_PACKAGE_REGISTRY_URL}/${PLASMA_PACKAGENAME}-${PLASMA_VERSION}.tar.gz'
+    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${WALLPROBE_PACKAGE_REGISTRY_URL}'
+    - ls -lh
+    - tar zxvf ${TNE_PACKAGENAME}-${TNE_VERSION}.tar.gz
+    - tar zxvf ${PLASMA_PACKAGENAME}-${PLASMA_VERSION}.tar.gz
+    - tar zxvf ${ABLATIONLIB_PACKAGENAME}-${ABLATIONLIB_VERSION}.tar.gz
+    - ls -lh
+  artifacts:
+    paths:
+      - modules/tne/
+      - modules/plasma_m.so
+      - modules/collisionIntegrals
+      - modules/wallProbe_m.so
+
+test-regression:
+  stage: test
+  script:
+    - whoami
+    - ls -lh
+    - env
+    - scl enable gcc-toolset-${GCCVERSION} 'bash ci/run_regression_tests ${MAX_PROCS}'
+
+
+# This will upload a tarball with the CHAR install to the package registry, but only when changes are merged into main
+# See: https://docs.gitlab.com/ee/user/project/releases/release_fields.html#release-assets
+upload_package:
+  stage: upload
+  rules:
+    # only run job if tag created with just a version number
+    - if: $CI_COMMIT_TAG =~ /\d+/
+  script:
+    - |
+      ls -lh
+      echo $PACKAGE_REGISTRY_URL
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ${MODULE_NAME}_m.so "${PACKAGE_REGISTRY_URL}/${MODULE_NAME}_m.so"
+
+
+# This will create a release when main is tagged with a version number
+release_job:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /\d+/  # only run this job if a tag is created with just a version number
+  script:
+    - echo "running release_job for ${VERSION}"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: ${CI_COMMIT_REF_NAME}-${CI_JOB_ID}
+    ref: $CI_COMMIT_SHA
+    assets:
+      links:
+        - name: ${MODULE_NAME}_m.so
+          url: "${PACKAGE_REGISTRY_URL}/${MODULE_NAME}_m.so"
+          filepath: "/${MODULE_NAME}_m.so"
+          link_type: package
+
+# Code and security scanning jobs
+sast:
+  stage: quality_check
+  artifacts:
+    paths:
+      - gl-sast-report.*
+
+include:
+  - template: Jobs/SAST.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Jobs/SAST.gitlab-ci.yml
+
