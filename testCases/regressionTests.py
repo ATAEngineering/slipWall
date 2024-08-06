@@ -237,8 +237,8 @@ def main():
   cylinder.SetRunDirectory("cylinder")
   cylinder.SetNumberOfProcessors(maxProcs)
   cylinder.SetNumberOfIterations(1000)
-  truthData = {os.path.join("output", "resid.dat"): [715.655142, 4277818655.0, 870682.3647],
-               "wprobe1.dat" : [871.15356992501, 156260.41105801]}
+  truthData = {os.path.join("output", "resid.dat"): [221.8712766, 13028247710.0, 1703822.893],
+               "wprobe1.dat" : [8966.7375412643, 5670494.1935112]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        "wprobe1.dat": [2, 4]}
   cylinder.SetTruthData(truthData, truthDataLocation)
