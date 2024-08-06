@@ -79,13 +79,12 @@ download_modules:
     - cd modules
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${TNE_PACKAGE_REGISTRY_URL}/${TNE_PACKAGENAME}-${TNE_VERSION}.tar.gz'
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${PLASMA_PACKAGE_REGISTRY_URL}/${PLASMA_PACKAGENAME}-${PLASMA_VERSION}.tar.gz'
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${REACTINGWALL_PACKAGE_REGISTRY_URL}/${REACTINGWALL_PACKAGENAME}-${REACTINGWALL_VERSION}.tar.gz'
+    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${REACTINGWALL_PACKAGE_REGISTRY_URL}'
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${WALLPROBE_PACKAGE_REGISTRY_URL}'
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL}'
     - ls -lh
     - tar zxvf ${TNE_PACKAGENAME}-${TNE_VERSION}.tar.gz
     - tar zxvf ${PLASMA_PACKAGENAME}-${PLASMA_VERSION}.tar.gz
-    - tar zxvf ${REACTINGWALL_PACKAGENAME}-${REACTINGWALL_VERSION}.tar.gz
     - ls -lh
   artifacts:
     paths:
