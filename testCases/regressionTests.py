@@ -231,6 +231,25 @@ def main():
   totalPass = totalPass and all(passed)
 
   # ------------------------------------------------------------------
+  # cylinder - reacting air with catalytic wall
+  cylinder = regressionTest()
+  cylinder.SetRegressionCase("cylinder")
+  cylinder.SetRunDirectory("cylinder")
+  cylinder.SetNumberOfProcessors(maxProcs)
+  cylinder.SetNumberOfIterations(1000)
+  truthData = {os.path.join("output", "resid.dat"): [221.8712766, 13028247710.0, 1703822.893],
+               "wprobe1.dat" : [8966.7375412643, 5670494.1935112]}
+  truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
+                       "wprobe1.dat": [2, 4]}
+  cylinder.SetTruthData(truthData, truthDataLocation)
+  cylinder.SetMpirunPath(args.mpirunPath)
+
+  # run regression case
+  passed = cylinder.RunCase()
+  totalPass = totalPass and all(passed)
+
+
+  # ------------------------------------------------------------------
   # regression test overall pass/fail
   # ------------------------------------------------------------------
   errorCode = 0
@@ -241,6 +260,7 @@ def main():
     errorCode = 1
   print("--------------------------------------------------")
   print("double_cone:", double_cone.PassedStatus())
+  print("cylinder:", cylinder.PassedStatus())
   sys.exit(errorCode)
 
 
