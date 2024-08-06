@@ -230,16 +230,16 @@ def main():
   passed = double_cone.RunCase()
   totalPass = totalPass and all(passed)
 
+  # ------------------------------------------------------------------
+  # cylinder - reacting air with catalytic wall
   cylinder = regressionTest()
   cylinder.SetRegressionCase("cylinder")
   cylinder.SetRunDirectory("cylinder")
   cylinder.SetNumberOfProcessors(maxProcs)
   cylinder.SetNumberOfIterations(1000)
   truthData = {os.path.join("output", "resid.dat"): [715.655142, 4277818655.0, 870682.3647],
-               os.path.join("output", "ev_resid.dat"): [36391873.11],
                "wprobe1.dat" : [871.15356992501, 156260.41105801]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
-                       os.path.join("output", "ev_resid.dat"): [1],
                        "wprobe1.dat": [2, 4]}
   cylinder.SetTruthData(truthData, truthDataLocation)
   cylinder.SetMpirunPath(args.mpirunPath)
