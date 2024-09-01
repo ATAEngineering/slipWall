@@ -86,7 +86,7 @@ build_module_mpich:
       - version.hpp
 
 download_modules:
-  stage: get_test_dependencies
+  stage: download
   image: "${BUILD_IMAGE}-openmpi"  
   script:
     - echo ${GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL} ${GLOBALTIMESTEPPING_PACKAGENAME}
