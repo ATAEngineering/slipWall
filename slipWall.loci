@@ -41,7 +41,7 @@ namespace {
     PrintOnConstruct() {
       if (Loci::MPI_rank == 0) {
         cout << "slipWall version: " << MODULEVERSION 
-             << " developed by ATA Engineering : compiled on "
+             << " : developed by ATA Engineering : compiled on "
              << __DATE__ << " " << __TIME__ << endl;
       }
     }
