@@ -188,9 +188,9 @@ upload_distribution:
       cp -r testCases ${MODULE_NAME}-${VERSION}/
       rm ${MODULE_NAME}-${VERSION}/testCases/regressionTests.py
       cd ${MODULE_NAME}-${VERSION}
-      sed -i '/GITCHECK/,/versioning)/d' Makefile
-      sed -i 's/version.hpp//g' Makefile
-      sed -i 's/version//g' Makefile
+      sed -i '/version.hpp/,/versioning)/d' Makefile
+      sed -i 's/module: $(VERSION_FILE)/module:/g' Makefile
+      sed -i '/VERSION_FILE/d' Makefile
       cd ..
       tar zcvf ${MODULE_NAME}-${VERSION}.tar.gz ${MODULE_NAME}-${VERSION}
       echo $PACKAGE_REGISTRY_URL
