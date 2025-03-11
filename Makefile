@@ -37,29 +37,28 @@ JUNK = *~  core ti_files ii_files rii_files
 
 LIB_OBJS=$(LOCI_OBJS:.o=_lo.o)
 
-all: $(MODULE_NAME)_m.so
+.DEFAULT_GOAL: all
 
-GITCHECK = $(shell git status | head -n 1)
-TEST = $(findstring fatal,$(GITCHECK))
-VERSTRING = unknown
-ifeq (branch,$(TEST))
-	VERSTRING = unknown
-	$(info This is NOT a git repository)
-else
-	VERSTRING = $(shell git describe --tags)
-endif
+all: module
 
-version: 
-	$(info Creating version string)
-	@echo '#ifndef MODULEVERSION' >> version.hpp
-	@echo -n '#define MODULEVERSION "' >> version.hpp
-	$(info version is ${VERSTRING})
-	@echo -n $(VERSTRING) >> version.hpp
-	@echo '"' >> version.hpp
-	@echo '#endif' >> version.hpp
+VERSION_FILE := version.hpp
+
+$(VERSION_FILE): 
+	$(info Checking for git)
+	@echo "#ifndef MODULEVERSION" > $(VERSION_FILE)
+	@if [ -d .git ]; then  \
+	  echo "this is a git repository"; \
+	  VERSTRING=$$(git describe --tags --always); \
+	else \
+	  echo "this is NOT a git repository"; \
+	  VERSTRING="unknown"; \
+	fi; \
+	echo "version is $${VERSTRING}"; \
+	echo "#define MODULEVERSION \"$${VERSTRING}\"" >> $(VERSION_FILE)
+	@echo "#endif" >> $(VERSION_FILE)
 	$(info done with versioning)
 
-$(MODULE_NAME)_m.so: $(LIB_OBJS) $(OBJS) version
+module: $(VERSION_FILE) $(LIB_OBJS) $(OBJS)
 	$(SHARED_LD) $(SHARED_LD_FLAGS) $(MODULE_NAME)_m.so $(LIB_FLAGS) $(LIB_OBJS) $(OBJS)
 
 FRC : 
@@ -67,14 +66,15 @@ FRC :
 clean:
 	rm -fr $(LOCI_OBJS) $(OBJS) $(LIB_OBJS) $(MODULE_NAME)_m.so $(JUNK)
 
-install: $(MODULE_NAME)_m.so
+install: module
 	cp $(MODULE_NAME)_m.so $(CHEM_BASE)/lib
 
 LOCI_FILES = $(wildcard *.loci)
 LOCI_LPP_FILES = $(LOCI_FILES:.loci=.cc)
 
 distclean: 
-	rm $(DEPEND_FILES) version.hpp
+	rm $(DEPEND_FILES) 
+	rm -fr $(VERSION_FILE)
 	rm -fr $(LOCI_OBJS) $(OBJS) $(LIB_OBJS) $(MODULE_NAME)_m.so $(JUNK) $(LOCI_LPP_FILES)
 
 # dependencies
@@ -90,4 +90,5 @@ JUNK += $(subst .loci,.cc,$(LOCI_FILES))
 #include automatically generated dependencies                                                                                                         
 ifeq ($(filter $(MAKECMDGOALS),clean distclean),)
 -include $(DEPEND_FILES)
+-include $(VERSION_FILE)
 endif
