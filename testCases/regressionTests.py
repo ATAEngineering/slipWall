@@ -217,9 +217,9 @@ def main():
   double_cone.SetRunDirectory("double_cone")
   double_cone.SetNumberOfProcessors(maxProcs)
   double_cone.SetNumberOfIterations(200)
-  truthData = {os.path.join("output", "resid.dat"): [704.4462731, 4154026278.0, 853884.9831],
-               os.path.join("output", "ev_resid.dat"): [36372659.85],
-               "wprobe1.dat" : [861.3036224575, 156217.70988076]}
+  truthData = {os.path.join("output", "resid.dat"): [697.130363, 4206897899.0, 850686.794],
+               os.path.join("output", "ev_resid.dat"): [36366302.37],
+               "wprobe1.dat" : [870.75841535899, 156481.79978628]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        os.path.join("output", "ev_resid.dat"): [1],
                        "wprobe1.dat": [2, 4]}
@@ -237,8 +237,8 @@ def main():
   cylinder.SetRunDirectory("cylinder")
   cylinder.SetNumberOfProcessors(maxProcs)
   cylinder.SetNumberOfIterations(1000)
-  truthData = {os.path.join("output", "resid.dat"): [221.8712766, 13028247710.0, 1703822.893],
-               "wprobe1.dat" : [8966.7375412643, 5670494.1935112]}
+  truthData = {os.path.join("output", "resid.dat"): [264.6963684, 12439805260.0, 1591718.225],
+               "wprobe1.dat" : [9107.8591874374, 5763494.4788515]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        "wprobe1.dat": [2, 4]}
   cylinder.SetTruthData(truthData, truthDataLocation)
