@@ -183,11 +183,11 @@ namespace chem {
   OUTPUT_SCALAR("cell2node(mfp)", mfp);
 
   $type T_slip_lag store<real>;
-  $rule pointwise(T_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption) {
+  $rule pointwise(Twall::T_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption, ref->Twall_BCoption) {
     $T_slip_lag{n=0} = $Twall;
   }
-  $rule pointwise(radEq::T_slip_lag{n=0} <- ci->Tg_ic),
-    constraint(ref->slip_BCoption, ref->radiativeAdiabatic_BCoption) {
+  $rule pointwise(T_slip_lag{n=0} <- ci->Tg_ic),
+    constraint(ref->slip_BCoption) {
     $T_slip_lag{n=0} = $ci->$Tg_ic;
   }
 
@@ -360,11 +360,11 @@ namespace chem {
   $type cp_vib store<real>;
 
   $type Tv_slip_lag store<real>;
-  $rule pointwise(Tv_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption) {
+  $rule pointwise(Twall::Tv_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption, ref->Twall_BCoption) {
     $Tv_slip_lag{n=0} = $Twall;
   }
-  $rule pointwise(radEq::Tv_slip_lag{n=0} <- ci->Tg_ic),
-    constraint(ref->slip_BCoption, ref->radiativeAdiabatic_BCoption) {
+  $rule pointwise(Tv_slip_lag{n=0} <- ci->Tg_ic),
+    constraint(ref->slip_BCoption) {
     $Tv_slip_lag{n=0} = $ci->$Tg_ic;
   }
 
