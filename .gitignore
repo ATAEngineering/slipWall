@@ -22,3 +22,6 @@
 *.pdf
 *.log
 *.gz
+
+# other
+slurm.epilog

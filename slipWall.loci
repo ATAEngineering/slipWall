@@ -398,4 +398,19 @@ namespace chem {
       $Tv_f = $Tv_slip_lag + (Tv_slip - $Tv_slip_lag) * $slipRelaxation;
     }
   }
+
+  // Knudsen Number
+  $type kn store<real> ;
+  $type kn_f store<real> ;
+
+  $rule pointwise(kn <- grads(rho),rho,mfp) {
+    $kn = norm($grads(rho))/$rho*$mfp ;
+  }
+
+  $rule pointwise(kn_f <- grads_f(rho),rho_f,mfp_f) {
+    $kn_f = norm($grads_f(rho))/$rho_f*$mfp_f ;
+  }
+
+  OUTPUT_SCALAR("cell2node(kn)", kn) ;
+  OUTPUT_BNDRY_SCALAR("kn_f",bkn,"ci") ;
 }
