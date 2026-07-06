@@ -413,4 +413,7 @@ namespace chem {
 
   OUTPUT_SCALAR("cell2node(kn)", kn) ;
   OUTPUT_BNDRY_SCALAR("kn_f",bkn,"ci") ;
+
+  // Twall Output
+  OUTPUT_BNDRY_SCALAR("Twall",twall,"ci") ;
 }
