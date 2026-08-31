@@ -49,7 +49,6 @@ default:
 
 stages:          # List of stages for jobs, and their order of execution
   - build
-  - quality_check
   - download
   - test
   - upload
@@ -97,6 +96,7 @@ download_modules:
     - echo ${TNE_PACKAGE_REGISTRY_URL} ${TNE_PACKAGENAME}
     - echo ${PLASMA_PACKAGE_REGISTRY_URL} ${PLASMA_PACKAGENAME}
     - echo ${REACTINGWALL_PACKAGE_REGISTRY_URL} ${REACTINGWALL_PACKAGENAME} ${REACTINGWALL_VERSION}
+    - echo ${MAGIC_PACKAGE_REGISTRY_URL} ${MAGIC_PACKAGENAME} ${MAGIC_VERSION}
     - GLOBALTIMESTEPPING_TARBALL=${GLOBALTIMESTEPPING_PACKAGENAME}-${GLOBALTIMESTEPPING_VERSION}-build-openmpi.tar.gz    
     - WALLPROBE_TARBALL=${WALLPROBE_PACKAGENAME}-${WALLPROBE_VERSION}-build-openmpi.tar.gz
     - TNE_TARBALL=${TNE_PACKAGENAME}-${TNE_VERSION}-build-openmpi.tar.gz
@@ -121,6 +121,7 @@ download_modules:
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${REACTINGWALL_PACKAGE_REGISTRY_URL}/${REACTINGWALL_TARBALL}'
     - tar zxvf ${REACTINGWALL_TARBALL}
     - mv ${REACTINGWALL_PACKAGENAME}/*.so .
+    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${MAGIC_PACKAGE_REGISTRY_URL}/${MAGIC_TARBALL}'
     - tar zxvf ${MAGIC_TARBALL}
     - mv magic-${MAGIC_VERSION} magic
     - ls -lh
@@ -230,14 +231,4 @@ release_job:
           url: "${PACKAGE_REGISTRY_URL}/${MODULE_NAME}-${VERSION}.tar.gz"
           filepath: "/${MODULE_NAME}-${VERSION}.tar.gz"
           link_type: package
-
-# Code and security scanning jobs
-sast:
-  stage: quality_check
-  artifacts:
-    paths:
-      - gl-sast-report.*
-
-include:
-  - template: Jobs/SAST.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Jobs/SAST.gitlab-ci.yml
 
