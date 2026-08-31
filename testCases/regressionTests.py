@@ -250,20 +250,20 @@ def main():
 
   # ------------------------------------------------------------------
   # cylinder - reacting air with radiativeAdiabatic BC
-  cylinder = regressionTest()
-  cylinder.SetRegressionCase("cylinder")
-  cylinder.SetRunDirectory("cylinder_radeq")
-  cylinder.SetNumberOfProcessors(maxProcs)
-  cylinder.SetNumberOfIterations(1000)
+  cylinder_radeq = regressionTest()
+  cylinder_radeq.SetRegressionCase("cylinder")
+  cylinder_radeq.SetRunDirectory("cylinder_radeq")
+  cylinder_radeq.SetNumberOfProcessors(maxProcs)
+  cylinder_radeq.SetNumberOfIterations(1000)
   truthData = {os.path.join("output", "resid.dat"): [0, 0, 0],
                "wprobe1.dat" : [0, 0]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        "wprobe1.dat": [2, 4]}
-  cylinder.SetTruthData(truthData, truthDataLocation)
-  cylinder.SetMpirunPath(args.mpirunPath)
+  cylinder_radeq.SetTruthData(truthData, truthDataLocation)
+  cylinder_radeq.SetMpirunPath(args.mpirunPath)
 
   # run regression case
-  passed = cylinder.RunCase()
+  passed = cylinder_radeq.RunCase()
   totalPass = totalPass and all(passed)
 
 
@@ -279,6 +279,7 @@ def main():
   print("--------------------------------------------------")
   print("double_cone:", double_cone.PassedStatus())
   print("cylinder:", cylinder.PassedStatus())
+  print("cylinder_radeq:", cylinder_radeq.PassedStatus())
   sys.exit(errorCode)
 
 
