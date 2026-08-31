@@ -255,10 +255,10 @@ def main():
   cylinder_radeq.SetRunDirectory("cylinder_radeq")
   cylinder_radeq.SetNumberOfProcessors(maxProcs)
   cylinder_radeq.SetNumberOfIterations(2000)
-  truthData = {os.path.join("output", "resid.dat"): [0,0,0],
-               "wprobe1.dat" : [0, 0]}
+  truthData = {os.path.join("output", "resid.dat"): [22.66945033, 2682973525.0, 626032.0],
+               "wprobe1.dat" : [10011.121853998, 2455.4818003874, 1225019.3615968]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
-                       "wprobe1.dat": [2, 4]}
+                       "wprobe1.dat": [2, 3, 4]}
   cylinder_radeq.SetTruthData(truthData, truthDataLocation)
   cylinder_radeq.SetMpirunPath(args.mpirunPath)
 
