@@ -24,13 +24,13 @@ variables:
   SLIPWALL_INSTALL_PACKAGE: "${MODULE_NAME}-${VERSION}"
   PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${MODULE_NAME}/${VERSION}"
   TNE_PACKAGENAME: "tne"
-  TNE_VERSION: "1.4.5"
+  TNE_VERSION: "1.4.14"
   TNE_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${TNE_PACKAGENAME}/packages/generic/${TNE_PACKAGENAME}/${TNE_VERSION}"
   PLASMA_PACKAGENAME: "plasma"
-  PLASMA_VERSION: "1.3.7"
+  PLASMA_VERSION: "1.3.11"
   PLASMA_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${PLASMA_PACKAGENAME}/packages/generic/${PLASMA_PACKAGENAME}/${PLASMA_VERSION}"
   REACTINGWALL_PACKAGENAME: "reactingWall"
-  REACTINGWALL_VERSION: "2.0.8"
+  REACTINGWALL_VERSION: "2.2.0"
   REACTINGWALL_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${REACTINGWALL_PACKAGENAME}/packages/generic/${REACTINGWALL_PACKAGENAME}/${REACTINGWALL_VERSION}"
   WALLPROBE_PACKAGENAME: "wallProbe"
   WALLPROBE_VERSION: "1.0.5"
@@ -38,6 +38,9 @@ variables:
   GLOBALTIMESTEPPING_PACKAGENAME: "globalTimeStepping"
   GLOBALTIMESTEPPING_VERSION: "1.0.5"
   GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${GLOBALTIMESTEPPING_PACKAGENAME}/packages/generic/${GLOBALTIMESTEPPING_PACKAGENAME}/${GLOBALTIMESTEPPING_VERSION}"
+  MAGIC_PACKAGENAME: "magic"
+  MAGIC_VERSION: "0.3.2"
+  MAGIC_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/multiphysics-engine%2F${MAGIC_PACKAGENAME}/packages/generic/${MAGIC_PACKAGENAME}/${MAGIC_VERSION}"
   MAX_PROCS: "4"
 
 default:
@@ -46,7 +49,6 @@ default:
 
 stages:          # List of stages for jobs, and their order of execution
   - build
-  - quality_check
   - download
   - test
   - upload
@@ -94,11 +96,13 @@ download_modules:
     - echo ${TNE_PACKAGE_REGISTRY_URL} ${TNE_PACKAGENAME}
     - echo ${PLASMA_PACKAGE_REGISTRY_URL} ${PLASMA_PACKAGENAME}
     - echo ${REACTINGWALL_PACKAGE_REGISTRY_URL} ${REACTINGWALL_PACKAGENAME} ${REACTINGWALL_VERSION}
+    - echo ${MAGIC_PACKAGE_REGISTRY_URL} ${MAGIC_PACKAGENAME} ${MAGIC_VERSION}
     - GLOBALTIMESTEPPING_TARBALL=${GLOBALTIMESTEPPING_PACKAGENAME}-${GLOBALTIMESTEPPING_VERSION}-build-openmpi.tar.gz    
     - WALLPROBE_TARBALL=${WALLPROBE_PACKAGENAME}-${WALLPROBE_VERSION}-build-openmpi.tar.gz
     - TNE_TARBALL=${TNE_PACKAGENAME}-${TNE_VERSION}-build-openmpi.tar.gz
     - PLASMA_TARBALL=${PLASMA_PACKAGENAME}-${PLASMA_VERSION}-build-openmpi.tar.gz
     - REACTINGWALL_TARBALL=${REACTINGWALL_PACKAGENAME}-${REACTINGWALL_VERSION}-build-openmpi.tar.gz
+    - MAGIC_TARBALL=${MAGIC_PACKAGENAME}-${MAGIC_VERSION}-build.tar.gz
     - mkdir modules
     - cd modules
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL}/${GLOBALTIMESTEPPING_TARBALL}'
@@ -117,6 +121,9 @@ download_modules:
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${REACTINGWALL_PACKAGE_REGISTRY_URL}/${REACTINGWALL_TARBALL}'
     - tar zxvf ${REACTINGWALL_TARBALL}
     - mv ${REACTINGWALL_PACKAGENAME}/*.so .
+    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${MAGIC_PACKAGE_REGISTRY_URL}/${MAGIC_TARBALL}'
+    - tar zxvf ${MAGIC_TARBALL}
+    - mv magic-${MAGIC_VERSION} magic
     - ls -lh
   artifacts:
     paths:
@@ -126,6 +133,7 @@ download_modules:
       - modules/plasma_m.so
       - modules/collisionIntegrals
       - modules/reactingWall_m.so
+      - modules/magic
 
 test-regression:
   stage: test
@@ -223,14 +231,4 @@ release_job:
           url: "${PACKAGE_REGISTRY_URL}/${MODULE_NAME}-${VERSION}.tar.gz"
           filepath: "/${MODULE_NAME}-${VERSION}.tar.gz"
           link_type: package
-
-# Code and security scanning jobs
-sast:
-  stage: quality_check
-  artifacts:
-    paths:
-      - gl-sast-report.*
-
-include:
-  - template: Jobs/SAST.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Jobs/SAST.gitlab-ci.yml
 

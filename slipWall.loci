@@ -19,14 +19,14 @@
 #include "bctools.h"
 #include "qvi.h"
 #include "chemio.h"
+#include "fluidPhysics/fluidConst.h"
+#include "root.h"
 
 #include <vector>
 #include <string>
 #include <iostream>
 #include <fstream>
 
-//#include "transport_db.h"
-//#include "turb_param.h"
 $include "chem.lh"
 #include "version.hpp"
 
@@ -182,16 +182,17 @@ namespace chem {
 
   OUTPUT_SCALAR("cell2node(mfp)", mfp);
 
+  // ---------------------------------------------------------------------
+  // Computed lagged variables needed for BC implementation
   $type T_slip_lag store<real>;
-  $rule pointwise(Twall::T_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption, ref->Twall_BCoption) {
+  $rule pointwise(Twall::T_slip_lag{n=0} <- Twall), 
+    constraint(ref->slip_BCoption, ref->Twall_BCoption) {
     $T_slip_lag{n=0} = $Twall;
   }
   $rule pointwise(T_slip_lag{n=0} <- ci->Tg_ic),
     constraint(ref->slip_BCoption) {
     $T_slip_lag{n=0} = $ci->$Tg_ic;
   }
-
-
   
   $rule pointwise(T_slip_lag{n+1} <- temperature_f{n,it}, T_slip_lag{n}), 
       constraint(ref->slip_BCoption), conditional(newton_finished{n,it}) {
@@ -209,8 +210,83 @@ namespace chem {
     $u_slip_lag{n+1} = $u_f{n,it};
   }
 
+  $type kconduct_f_lag store<real>;
+  $rule pointwise(kconduct_f_lag{n = 0} <- area), 
+     constraint(viscousWall_BC, ref->slip_BCoption) {
+    $kconduct_f_lag{n = 0} = 1e-5;
+  }
+  $rule pointwise(kconduct_f_lag{n + 1} <- kconduct_f{n, it}, kconduct_f_lag{n}),
+      constraint(viscousWall_BC, ref->slip_BCoption),
+      conditional(newton_finished{n, it}) {
+    $kconduct_f_lag{n + 1} = $kconduct_f{n, it};
+  }
+
+  $type nonequilibrium_on Constraint;
+  $type kcond_vib_f store<real>;
+  $type kcond_vib_f_lag store<real>;
+  $rule pointwise(kcond_vib_f_lag{n = 0} <- area), 
+     constraint(viscousWall_BC, ref->slip_BCoption, nonequilibrium_on) {
+    $kcond_vib_f_lag{n = 0} = 1e-5;
+  }
+  $rule pointwise(kcond_vib_f_lag{n + 1} <- kcond_vib_f{n, it}, kcond_vib_f_lag{n}),
+      constraint(viscousWall_BC, ref->slip_BCoption, nonequilibrium_on),
+      conditional(newton_finished{n, it}) {
+    $kcond_vib_f_lag{n + 1} = $kcond_vib_f{n, it};
+  }
+
+  $type cp_vib_f store<real>;
+  $type cp_vib_f_lag store<real>;
+  $rule pointwise(cp_vib_f_lag{n = 0} <- area), 
+     constraint(viscousWall_BC, ref->slip_BCoption, nonequilibrium_on) {
+    $cp_vib_f_lag{n = 0} = 1e-5;
+  }
+  $rule pointwise(cp_vib_f_lag{n + 1} <- cp_vib_f{n, it}, cp_vib_f_lag{n}),
+      constraint(viscousWall_BC, ref->slip_BCoption, nonequilibrium_on),
+      conditional(newton_finished{n, it}) {
+    $cp_vib_f_lag{n + 1} = $cp_vib_f{n, it};
+  }
+
+  $type muu_f_lag store<real>;
+  $rule pointwise(muu_f_lag{n = 0} <- area), 
+     constraint(viscousWall_BC, ref->slip_BCoption) {
+    $muu_f_lag{n = 0} = 1e-5;
+  }
+  $rule pointwise(muu_f_lag{n + 1} <- muu_f{n, it}, muu_f_lag{n}),
+      constraint(viscousWall_BC, ref->slip_BCoption),
+      conditional(newton_finished{n, it}) {
+    $muu_f_lag{n + 1} = $muu_f{n, it};
+  }
+
+  $type q_ic storeVec<real>;
+  $type mixture_f_lag storeVec<real>;
+  $rule pointwise(mixture_f_lag{n = 0} <- ci->q_ic, numSpecies), 
+     constraint(viscousWall_BC, ref->slip_BCoption), prelude {
+    $mixture_f_lag{n = 0}.setVecSize(*$numSpecies);
+  } compute {
+    auto rho = 0.0;
+    for (int i = 0; i < $numSpecies; ++i) {
+      rho += $ci->$q_ic[i];
+    }
+    for (int i = 0; i < $numSpecies; ++i) {
+      $mixture_f_lag{n = 0}[i] = $ci->$q_ic[i] / rho;
+    }
+  }
+  $rule pointwise(mixture_f_lag{n + 1} <- mixture_f{n, it}, mixture_f_lag{n},
+                  numSpecies),
+      constraint(viscousWall_BC, ref->slip_BCoption),
+      conditional(newton_finished{n, it}), prelude {
+    $mixture_f_lag{n+1}.setVecSize(*$numSpecies);
+  } compute {
+    for (int i = 0; i < $numSpecies; ++i) {
+      $mixture_f_lag{n + 1}[i] = $mixture_f{n, it}[i];
+    }
+  }
+
+  // ---------------------------------------------------------------------
   $type haveReactingOrChar param<int>;
-  $rule unit(haveReactingOrChar), constraint(boundary_faces) { $haveReactingOrChar = 0; }
+  $rule unit(haveReactingOrChar), constraint(boundary_faces) {
+    $haveReactingOrChar = 0;
+  }
 
   $rule apply(haveReactingOrChar <- ci)[Loci::Maximum], 
       constraint(ref->slip_BCoption) {
@@ -234,16 +310,28 @@ namespace chem {
     $noReactingOrChar = $haveReactingOrChar ? EMPTY : ~EMPTY;
   }
 
+  real compute_T_slip_dist(const double& sigma_T_slip, const real* mixture,
+                           const real& p, const real& T,
+                           const double& kconduct,
+                           const fluidPhysics::EOS& eos) {
+    auto s = eos.State_from_mixture_p_T(mixture, p, T);
+    const auto R = s.gasConstant();
+    const auto rho = s.density();
+    const auto T_coeff = (2.0 - sigma_T_slip) / sigma_T_slip;
+    const auto cpfac = 2.0 / (s.cpt() + s.cvt());
+    return T_coeff * cpfac * kconduct / rho * sqrt(M_PI / (2. * R * T));
+  }
+
   void compute_slip_conditions(
-      const int &ncycle, const int &slipDelay, const fluidPhysics::EOS &eos,
-      const real &p, const real &Ti, const real *mixture_f, const vect3d &u,
-      const double &muu, const double &kconduct, const double &Twall,
-      const vect3d &n, const double &sigma_u_slip, const vect3d &u_slip_lag,
-      const real &slipRelaxation, const double &sigma_T_slip,
-      const real &T_slip_lag, const vect3d &facecenter,
-      const vect3d &cellcenter, vect3d &u_f, real &t_f) {
+      const int& ncycle, const int& slipDelay, const fluidPhysics::EOS& eos,
+      const real& p, const real& Ti, const real* mixture_f, const vect3d& u,
+      const double& muu, const double& Twall, const vect3d& n,
+      const double& sigma_u_slip, const vect3d& u_slip_lag,
+      const real& slipRelaxation, const double& T_slip_lag,
+      const vect3d& facecenter, const vect3d& cellcenter,
+      const double& T_slip_dist, vect3d& u_f, real& t_f) {
     if (ncycle >= slipDelay) {  // use slip bc
-      auto s = eos.State_from_mixture_p_T(mixture_f, p, Ti);
+      auto s = eos.State_from_mixture_p_T(mixture_f, p, T_slip_lag);
       const auto R = s.gasConstant();
       const auto rho = s.density();
 
@@ -256,43 +344,57 @@ namespace chem {
       // only considering the normal component
       const auto dist = norm(facecenter - cellcenter);
       const auto u_coeff = (2.0 - sigma_u_slip) / sigma_u_slip;
-      const auto mfp = u_coeff * muu / rho * sqrt(M_PI / (2. * R * Ti));
+      const auto mfp = u_coeff * muu / rho * sqrt(M_PI / (2. * R * T_slip_lag));
       const auto u_slip = mfp * u_tangential / (mfp + dist) + u_f;
       u_f = u_slip_lag + (u_slip - u_slip_lag) * slipRelaxation;
 
       // wall temperature
-      const auto T_coeff = (2.0 - sigma_T_slip) / sigma_T_slip;
-      const auto cpfac = 2.0 / (s.cpt() + s.cvt());
-      const auto tmfp =
-          T_coeff * cpfac * kconduct / rho * sqrt(M_PI / (2. * R * Ti));
-      const auto T_slip = (Twall * dist + tmfp * Ti) / (tmfp + dist);
+      const auto T_slip =
+          (Twall * dist + T_slip_dist * Ti) / (dist + T_slip_dist);
       t_f = T_slip_lag + (T_slip - T_slip_lag) * slipRelaxation;
     }
   }
 
-  $rule pointwise(slip::temperature_f, slip::gaugePressure_f,
-                  slip::mixture_f, slip::u_f <- us,
-                  area, Twall, eos, wallVelocity, Pambient,
-                  ci->(mixture, gaugePressure, u, muu, kconduct, 
-                       temperature, cellcenter), slipDelay, ncycle,
-                  sigma_u_slip, sigma_T_slip, facecenter, T_slip_lag, 
-                  u_slip_lag, slipRelaxation),
+  // compute temperature slip distance from lagged properties of gas at wall
+  $type T_slip_dist store<real>;
+  $rule pointwise(slip::T_slip_dist <- Pambient, mixture_f_lag, kconduct_f_lag,
+                  ci->gaugePressure, T_slip_lag, sigma_T_slip, eos),
+      constraint(ref->slip_BCoption) {
+    const auto p = $ci->$gaugePressure + $Pambient;
+    $T_slip_dist = compute_T_slip_dist($sigma_T_slip, $mixture_f_lag, p,
+                                       $T_slip_lag, $kconduct_f_lag, $eos);
+  }
+
+  // ---------------------------------------------------------------------
+  $rule pointwise(slip::gaugePressure_f <- ci->gaugePressure),
+      constraint(ref->slip_BCoption, noReactingOrChar) {
+    $gaugePressure_f = $ci->$gaugePressure;
+  }
+
+  $rule pointwise(slip::mixture_f <- ci->mixture),
       constraint(ref->slip_BCoption, noReactingOrChar), prelude {
     $mixture_f.setVecSize($mixture.vecSize());
   } compute {
-    // no-slip bc conditions
     $mixture_f = $ci->$mixture;
-    $gaugePressure_f = $ci->$gaugePressure;
+  }
+
+  $rule pointwise(slip::temperature_f, slip::u_f <- us, area, Twall, eos, 
+                  wallVelocity, Pambient, mixture_f, gaugePressure_f,
+                  ci->(u, temperature, cellcenter), muu_f_lag, 
+                  slipDelay, ncycle, sigma_u_slip, facecenter,
+                  T_slip_lag, u_slip_lag, slipRelaxation, T_slip_dist),
+      constraint(ref->slip_BCoption, noReactingOrChar) {
+    // no-slip bc conditions
     $temperature_f = $Twall;
     const auto uwall = $wallVelocity;
     $u_f = uwall - dot(uwall, $area.n) * $area.n + $us;
 
-    const auto p = $ci->$gaugePressure + $Pambient;
-    compute_slip_conditions(
-        $ncycle, $slipDelay, $eos, p, $ci->$temperature, $mixture_f, $ci->$u,
-        $ci->$muu, $ci->$kconduct, $Twall, $area.n, $sigma_u_slip, $u_slip_lag,
-        $slipRelaxation, $sigma_T_slip, $T_slip_lag, $facecenter,
-        $ci->$cellcenter, $u_f, $temperature_f);
+    const auto p = $gaugePressure_f + $Pambient;
+    compute_slip_conditions($ncycle, $slipDelay, $eos, p, $ci->$temperature,
+                            $mixture_f, $ci->$u, $muu_f_lag, $Twall, $area.n,
+                            $sigma_u_slip, $u_slip_lag, $slipRelaxation,
+                            $T_slip_lag, $facecenter, $ci->$cellcenter,
+                            $T_slip_dist, $u_f, $temperature_f);
   }
 
   // -------------------------------------------------------------------------
@@ -301,66 +403,54 @@ namespace chem {
 
   // for slip and reacting wall - override normal reacting wall bc values
   $type blowingVelocity store<real>;
-  $rule pointwise(slip::reacting::temperature_f, slip::reacting::gaugePressure_f,
-                  slip::reacting::mixture_f, slip::reacting::u_f <- us,
-                  area, Twall, eos, wallVelocity, Pambient,
-                  ci->(mixture, gaugePressure, u, muu, kconduct, 
-                       temperature, cellcenter), slipDelay, ncycle,
-                  sigma_u_slip, sigma_T_slip, facecenter, T_slip_lag, 
-                  u_slip_lag, slipRelaxation, blowingVelocity),
-      constraint(ref->slip_BCoption, ref->reacting_BCoption), prelude {
-    $mixture_f.setVecSize($mixture.vecSize());
-  } compute {
+  $rule pointwise(slip::reacting::temperature_f, slip::reacting::u_f <- us, area, 
+                  Twall, eos, wallVelocity, Pambient, T_slip_dist, mixture_f_lag,
+                  ci->(u, temperature, cellcenter), muu_f_lag, 
+                  slipDelay, ncycle, sigma_u_slip, facecenter, gaugePressure_f,
+                  T_slip_lag, u_slip_lag, slipRelaxation, blowingVelocity),
+      constraint(ref->slip_BCoption, ref->reacting_BCoption) {
     // no-slip bc conditions
-    $mixture_f = $ci->$mixture;
-    $gaugePressure_f = $ci->$gaugePressure;
     $temperature_f = $Twall;
     const auto uwall = $wallVelocity;
     $u_f = uwall - dot(uwall, $area.n) * $area.n + $us;
     $u_f -= $blowingVelocity * $area.n;
 
-    const auto p = $ci->$gaugePressure + $Pambient;
+    const auto p = $gaugePressure_f + $Pambient;
     compute_slip_conditions(
-        $ncycle, $slipDelay, $eos, p, $ci->$temperature, $mixture_f, $ci->$u,
-        $ci->$muu, $ci->$kconduct, $Twall, $area.n, $sigma_u_slip, $u_slip_lag,
-        $slipRelaxation, $sigma_T_slip, $T_slip_lag, $facecenter,
-        $ci->$cellcenter, $u_f, $temperature_f);
+        $ncycle, $slipDelay, $eos, p, $ci->$temperature, $mixture_f_lag,
+        $ci->$u, $muu_f_lag, $Twall, $area.n, $sigma_u_slip, $u_slip_lag,
+        $slipRelaxation, $T_slip_lag, $facecenter, $ci->$cellcenter,
+        $T_slip_dist, $u_f, $temperature_f);
   }
 
   // for slip and charring wall - override normal char wall bc values
-  $rule pointwise(slip::ablative::temperature_f, slip::ablative::gaugePressure_f,
-                  slip::ablative::mixture_f, slip::ablative::u_f <- us,
-                  area, Twall, eos, wallVelocity, Pambient,
-                  ci->(mixture, gaugePressure, u, muu, kconduct, 
-                       temperature, cellcenter), slipDelay, ncycle,
-                  sigma_u_slip, sigma_T_slip, facecenter, T_slip_lag, 
-                  u_slip_lag, slipRelaxation, blowingVelocity),
-      constraint(ref->slip_BCoption, charFaces, haveSurfaceReactions), prelude {
-    $mixture_f.setVecSize($mixture.vecSize());
-  } compute {
+  $rule pointwise(slip::ablative::temperature_f, slip::ablative::u_f <- us, area, 
+                  Twall, eos, wallVelocity, Pambient, T_slip_dist, mixture_f_lag,
+                  ci->(u, temperature, cellcenter), muu_f_lag, 
+                  slipDelay, ncycle, sigma_u_slip, facecenter, gaugePressure_f,
+                  T_slip_lag, u_slip_lag, slipRelaxation, blowingVelocity),
+      constraint(ref->slip_BCoption, charFaces, haveSurfaceReactions) {
     // no-slip bc conditions
-    $mixture_f = $ci->$mixture;
-    $gaugePressure_f = $ci->$gaugePressure;
     $temperature_f = $Twall;
     const auto uwall = $wallVelocity;
     $u_f = uwall - dot(uwall, $area.n) * $area.n + $us;
     $u_f -= $blowingVelocity * $area.n;
 
-    const auto p = $ci->$gaugePressure + $Pambient;
+    const auto p = $gaugePressure_f + $Pambient;
     compute_slip_conditions(
-        $ncycle, $slipDelay, $eos, p, $ci->$temperature, $mixture_f, $ci->$u,
-        $ci->$muu, $ci->$kconduct, $Twall, $area.n, $sigma_u_slip, $u_slip_lag,
-        $slipRelaxation, $sigma_T_slip, $T_slip_lag, $facecenter,
-        $ci->$cellcenter, $u_f, $temperature_f);
+        $ncycle, $slipDelay, $eos, p, $ci->$temperature, $mixture_f_lag,
+        $ci->$u, $muu_f_lag, $Twall, $area.n, $sigma_u_slip, $u_slip_lag,
+        $slipRelaxation, $T_slip_lag, $facecenter, $ci->$cellcenter,
+        $T_slip_dist, $u_f, $temperature_f);
   }
 
+  // -------------------------------------------------------------------------
   $type Tv store<real>;
   $type Tv_f store<real>;
-  $type kcond_vib store<real>;
-  $type cp_vib store<real>;
 
   $type Tv_slip_lag store<real>;
-  $rule pointwise(Twall::Tv_slip_lag{n=0} <- Twall), constraint(ref->slip_BCoption, ref->Twall_BCoption) {
+  $rule pointwise(Twall::Tv_slip_lag{n=0} <- Twall), 
+      constraint(ref->slip_BCoption, ref->Twall_BCoption) {
     $Tv_slip_lag{n=0} = $Twall;
   }
   $rule pointwise(Tv_slip_lag{n=0} <- ci->Tg_ic),
@@ -368,33 +458,37 @@ namespace chem {
     $Tv_slip_lag{n=0} = $ci->$Tg_ic;
   }
 
-
-  
   $rule pointwise(Tv_slip_lag{n+1} <- Tv_f{n,it}, Tv_slip_lag{n}), 
     constraint(ref->slip_BCoption),  conditional(newton_finished{n,it}) {
     $Tv_slip_lag{n+1} = $Tv_f{n,it};
   }
 
-  $rule pointwise(slip::noslip::Tv_f <- area, mixture_f, gaugePressure_f,
-                  temperature_f, rho_f, Twall,
-                  ci->(kcond_vib, cp_vib, Tv, cellcenter), Tv_slip_lag, eos,
-                  Pambient, sigma_Tv_slip, facecenter, slipDelay,
-                  slipRelaxation, ncycle),
+  $type Tv_slip_dist store<real>;
+  $rule pointwise(slip::Tv_slip_dist <- sigma_Tv_slip, Pambient, eos,
+                  mixture_f_lag, ci->gaugePressure, T_slip_lag,
+                  kcond_vib_f_lag, cp_vib_f_lag),
+      constraint(ref->slip_BCoption) {
+    const auto p = $ci->$gaugePressure + $Pambient;
+    auto s = $eos.State_from_mixture_p_T($mixture_f_lag, p, $T_slip_lag);
+    const auto R = s.gasConstant();
+    const auto rho = s.density();
+    const auto Tv_coeff = (2.0 - $sigma_Tv_slip) / $sigma_Tv_slip;
+    $Tv_slip_dist = Tv_coeff * $kcond_vib_f_lag / (rho * $cp_vib_f_lag) *
+                    sqrt(M_PI / (2. * R * $T_slip_lag));
+  }
+
+  $rule pointwise(slip::noslip::Tv_f <- temperature_f, Twall, facecenter,
+                  slipDelay, ci->(Tv, cellcenter), Tv_slip_lag, slipRelaxation,
+                  ncycle, Tv_slip_dist),
       constraint(ref->slip_BCoption) {
     $Tv_f = $temperature_f;  // no-slip bc
     if ($ncycle >= $slipDelay) {  // use slip bc
-      const auto p = $gaugePressure_f + $Pambient;
-      auto s = $eos.State_from_mixture_p_T($mixture_f, p, $temperature_f);
-      const auto R = s.gasConstant();
-
       // wall vibrational temperature
       // this distance calculation results in a better BC than
       // only considering the normal component
       const auto dist = norm($facecenter - $ci->$cellcenter);
-      const auto Tv_coeff = (2.0 - $sigma_Tv_slip) / $sigma_Tv_slip;
-      const auto mfp = Tv_coeff * $ci->$kcond_vib / 
-          ($rho_f * $ci->$cp_vib) * sqrt(M_PI / (2. * R * $temperature_f));
-      const auto Tv_slip = ($Twall * dist + mfp * $ci->$Tv) / (dist + mfp);
+      const auto Tv_slip =
+          ($Twall * dist + $Tv_slip_dist * $ci->$Tv) / (dist + $Tv_slip_dist);
       $Tv_f = $Tv_slip_lag + (Tv_slip - $Tv_slip_lag) * $slipRelaxation;
     }
   }
@@ -411,9 +505,142 @@ namespace chem {
     $kn_f = norm($grads_f(rho))/$rho_f*$mfp_f ;
   }
 
-  OUTPUT_SCALAR("cell2node(kn)", kn) ;
-  OUTPUT_BNDRY_SCALAR("kn_f",bkn,"ci") ;
+  OUTPUT_SCALAR("cell2node(kn)", kn);
+  OUTPUT_BNDRY_SCALAR("kn_f", bkn, "ci");
 
   // Twall Output
-  OUTPUT_BNDRY_SCALAR("Twall",twall,"ci") ;
-}
+  OUTPUT_BNDRY_SCALAR("Twall", twall, "ci");
+
+  // --------------------------------------------------------------------------
+  // In nonequilibrium mode the tne module handles the SEB and accounts for slip
+  // through T_slip_dist and Tv_slip_dist
+
+  // In thermal equilibrium override CHEM's default SEB to account for slip. Slip
+  // effectively just increases the distance used in the finite difference gradient
+  // at the wall.
+  // The temperature of the fluid: T_f = (T_w * dx + alpha * T_i) / (alpha + dx)
+  // Convective heat flux: q_conv = k * (T_i - T_f) / dx
+  // Plugging T_f into q_conv yields: q_conv = k * (T_i - T_w) / (dx + alpha)
+  OUTPUT_BNDRY_SCALAR("T_slip_dist", T_slip_dist, "ref->slip_BCoption");
+  OUTPUT_BNDRY_SCALAR("Tv_slip_dist", Tv_slip_dist, "ref->slip_BCoption");
+
+  // determine if nonequilibrium via the tne module is active
+  $type noneq_on_slip param<int>;
+  $rule unit(noneq_on_slip), constraint(UNIVERSE) { $noneq_on_slip = 0; }
+  $rule apply(noneq_on_slip)[Loci::Maximum], constraint(UNIVERSE) {
+    join($noneq_on_slip, 0);
+  }
+
+  $type noneq_active param<bool>;
+  $rule apply(noneq_on_slip <- noneq_active)[Loci::Maximum],
+    constraint(nonequilibrium_on) {
+    join($noneq_on_slip, $noneq_active);
+  }
+
+  $type thermal_equilibrium_slip Constraint;
+  $rule constraint(thermal_equilibrium_slip <- noneq_on_slip) {
+    $thermal_equilibrium_slip = ~EMPTY;
+    if ($noneq_on_slip > 0) {
+      $thermal_equilibrium_slip = EMPTY;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // radiative adiabatic viscous walls
+  // epsilon is surface emissivity, vf is view factor
+  inline real radiativeFlux(real T, real emissivity, real vf=1.0) {
+    const real T2 = T * T;
+    return vf * emissivity * fluidPhysics::sigma * T2 * T2;
+  }
+
+  class surfaceEnergyBalance {
+    real kbdx;      // k/dx => dx=delta x, k=gas conductivity
+    real Ti;        // translational temperture of gas above wall
+    real epsilon;   // surface emissivity
+    real qambient;  // radiation to ambient temperature
+    real qinc;      // additional heat flux terms (e.g. qdot_diff)
+
+   public:
+    surfaceEnergyBalance(real kbdxi, real Tii, real epsi, real qamb, real qinc)
+        : kbdx(kbdxi), Ti(Tii), epsilon(epsi), qambient(qamb), qinc(qinc) {}
+    real operator()(real Tw) {
+      // net radiative flux
+      const real qrad_net = -radiativeFlux(Tw, epsilon) + qambient;
+      // convective flux
+      real qconv = -(Tw - Ti) * kbdx;
+      // this function is zero when the fluxes are balanced
+      return qrad_net + qconv + qinc;
+    }
+  };
+
+  // heat flux to add to the SEB (e.g. diffusion)
+  $type qdot_add_seb store<real>;
+  $rule unit(qdot_add_seb), constraint(ref->slip_BCoption) {
+    $qdot_add_seb = 0.0;
+  }
+  $rule apply(qdot_add_seb)[Loci::Summation], constraint(ref->slip_BCoption) {
+    join($qdot_add_seb, 0.0);
+  }
+
+  // include the diffusive heat flux in the surface energy balance
+  $type AllDiffusionBCs Constraint;
+  $type diff_energy store<real>;
+  $rule apply(qdot_add_seb <- diff_energy, area)[Loci::Summation], 
+      constraint(ref->slip_BCoption, AllDiffusionBCs) {
+    join($qdot_add_seb, -$diff_energy / $area.sada);
+  }
+
+  // Need to lag qdot_add_seb because its inputs depend on the wall temperature
+  $type qdot_add_seb_lag store<real>;
+  $rule pointwise(qdot_add_seb_lag{n = 0} <- area), constraint(ref->slip_BCoption) {
+    $qdot_add_seb_lag{n = 0} = 0.0;
+  }
+  $rule pointwise(qdot_add_seb_lag{n + 1} <- qdot_add_seb{n, it},
+                  qdot_add_seb_lag{n}),
+      constraint(ref->slip_BCoption), conditional(newton_finished{n, it}) {
+    $qdot_add_seb_lag{n + 1} = $qdot_add_seb{n, it};
+  }
+
+
+  $type Tambient_BC store<real>;
+  $type emissivity store<real>;
+  $rule pointwise(slip::Twall <- ci->(temperature, cellcenter), kconduct_f_lag,
+                  facecenter, area, ref->(emissivity, Tambient_BC),
+                  qdot_add_seb_lag, T_slip_dist),
+      constraint(thermal_equilibrium_slip, ref->radiativeAdiabatic_BCoption, 
+                 ref->slip_BCoption) {
+    // delta x from wall to cell center
+    const real dx = dot($facecenter - $ci->$cellcenter, $area.n);
+    // surface emissivity
+    const real epsilon = $ref->$emissivity;
+    // fluid thermal conductivity
+    const real kt = $kconduct_f_lag;
+    // gas temperature above wall
+    const real Ti = $ci->$temperature;
+    const real Tambient = $ref->$Tambient_BC;
+    const real qambient = radiativeFlux(Tambient, epsilon);
+    surfaceEnergyBalance FluxBalance(kt / (dx + $T_slip_dist), Ti, epsilon,
+                                     qambient, $qdot_add_seb_lag);
+    $Twall = find_root(FluxBalance, real(.01), 2.0 * Ti, real(1e-5));
+  }
+
+  // --------------------------------------------------------------------------
+  // let adiabatic wall account for slip
+  
+  $type qdot_aux store<real>;
+  $rule pointwise(slip::qdot_aux <- qdot_add_seb_lag),
+      constraint(ref->slip_BCoption, thermal_equilibrium_slip) {
+    $qdot_aux = $qdot_add_seb_lag;
+  }
+
+  // wall temperature for adiabatic or prescribed heat flux viscous walls
+  $rule pointwise(slip::Twall <- ci->(cellcenter, temperature), area,
+                facecenter, qwall, qdot_aux, kconduct_f_lag, T_slip_dist),
+    constraint(ref->slip_BCoption, thermal_equilibrium_slip) {
+    const real dx = dot(($facecenter - $ci->$cellcenter), $area.n);
+    const real ktdx = $kconduct_f_lag / (dx + $T_slip_dist);
+    // compute temperature that would result in  specified heat flux
+    $Twall = (-($qwall + $qdot_aux) + ktdx * $ci->$temperature) / ktdx;
+  }
+
+}  // namespace chem

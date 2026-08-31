@@ -217,9 +217,9 @@ def main():
   double_cone.SetRunDirectory("double_cone")
   double_cone.SetNumberOfProcessors(maxProcs)
   double_cone.SetNumberOfIterations(200)
-  truthData = {os.path.join("output", "resid.dat"): [697.130363, 4206897899.0, 850686.794],
-               os.path.join("output", "ev_resid.dat"): [36366302.37],
-               "wprobe1.dat" : [870.75841535899, 156481.79978628]}
+  truthData = {os.path.join("output", "resid.dat"): [546.5013941, 3125297829.0, 651990.8413],
+               os.path.join("output", "ev_resid.dat"): [31603106.68],
+               "wprobe1.dat" : [771.67988052805, 191048.89831058]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        os.path.join("output", "ev_resid.dat"): [1],
                        "wprobe1.dat": [2, 4]}
@@ -237,8 +237,8 @@ def main():
   cylinder.SetRunDirectory("cylinder")
   cylinder.SetNumberOfProcessors(maxProcs)
   cylinder.SetNumberOfIterations(1000)
-  truthData = {os.path.join("output", "resid.dat"): [264.6963684, 12439805260.0, 1591718.225],
-               "wprobe1.dat" : [9107.8591874374, 5763494.4788515]}
+  truthData = {os.path.join("output", "resid.dat"): [277.9847418, 12132248860.0, 1583868.494],
+               "wprobe1.dat" : [9111.4937460191, 5746631.5817209]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        "wprobe1.dat": [2, 4]}
   cylinder.SetTruthData(truthData, truthDataLocation)
@@ -246,6 +246,24 @@ def main():
 
   # run regression case
   passed = cylinder.RunCase()
+  totalPass = totalPass and all(passed)
+
+  # ------------------------------------------------------------------
+  # cylinder - reacting air with radiativeAdiabatic BC
+  cylinder_radeq = regressionTest()
+  cylinder_radeq.SetRegressionCase("cylinder")
+  cylinder_radeq.SetRunDirectory("cylinder_radeq")
+  cylinder_radeq.SetNumberOfProcessors(maxProcs)
+  cylinder_radeq.SetNumberOfIterations(2000)
+  truthData = {os.path.join("output", "resid.dat"): [22.66945033, 2682973525.0, 626032.0],
+               "wprobe1.dat" : [10011.121853998, 2455.4818003874, 1225019.3615968]}
+  truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
+                       "wprobe1.dat": [2, 3, 4]}
+  cylinder_radeq.SetTruthData(truthData, truthDataLocation)
+  cylinder_radeq.SetMpirunPath(args.mpirunPath)
+
+  # run regression case
+  passed = cylinder_radeq.RunCase()
   totalPass = totalPass and all(passed)
 
 
@@ -261,6 +279,7 @@ def main():
   print("--------------------------------------------------")
   print("double_cone:", double_cone.PassedStatus())
   print("cylinder:", cylinder.PassedStatus())
+  print("cylinder_radeq:", cylinder_radeq.PassedStatus())
   sys.exit(errorCode)
 
 
