@@ -98,7 +98,6 @@ build_module_mpich:
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${DEP_PACKAGE_URL}/${DEP_TARBALL}'
     - tar zxvf ${DEP_TARBALL}
     - if [[ -n "${DEP_SO_PATH}" ]]; then mv ${DEP_SO_PATH}/*.so .; fi
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${MAGIC_PACKAGE_REGISTRY_URL}/${MAGIC_TARBALL}'
     - ls -lh
     - cd ..
   artifacts:
