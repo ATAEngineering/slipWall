@@ -2,10 +2,10 @@
 *.o
 *.lo
 *.d
-*.cc
 
 # ignore temporary files
 *.~
+*~
 
 # ignore LaTex files
 *.bbl
