@@ -92,7 +92,8 @@ build_module_mpich:
     - git config --global --add safe.directory ${CI_PROJECT_DIR}/.git
   script:
     - echo "${DEP_PACKAGE_URL} ${DEP_PACKAGE_NAME} ${DEP_PACKAGE_VERSION}"
-    - DEP_TARBALL=${DEP_PACKAGE_NAME}-${DEP_PACKAGE_VERSION}-build-openmpi.tar.gz    
+    - DEP_TARBALL=${DEP_PACKAGE_NAME}-${DEP_PACKAGE_VERSION}-build-openmpi.tar.gz  
+    - if [[ -n "${DEP_NO_MPI}" ]]; then DEP_TARBALL=${DEP_PACKAGE_NAME}-${DEP_PACKAGE_VERSION}-build.tar.gz; fi
     - mkdir -p modules
     - cd modules
     - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${DEP_PACKAGE_URL}/${DEP_TARBALL}'
@@ -146,6 +147,7 @@ download_magic:
     DEP_PACKAGE_NAME: ${MAGIC_PACKAGENAME}
     DEP_PACKAGE_URL: ${MAGIC_PACKAGE_REGISTRY_URL}
     DEP_PACKAGE_VERSION: ${MAGIC_VERSION}
+    DEP_NO_MPI: "none"
   after_script:
     - mv modules/${MAGIC_PACKAGENAME}-${MAGIC_VERSION} modules/${MAGIC_PACKAGENAME}
 
