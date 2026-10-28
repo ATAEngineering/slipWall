@@ -257,7 +257,6 @@ namespace chem {
     $muu_f_lag{n + 1} = $muu_f{n, it};
   }
 
-  $type q_ic storeVec<real>;
   $type mixture_f_lag storeVec<real>;
   $rule pointwise(mixture_f_lag{n = 0} <- ci->q_ic, numSpecies), 
      constraint(viscousWall_BC, ref->slip_BCoption), prelude {
