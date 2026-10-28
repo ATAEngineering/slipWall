@@ -123,6 +123,14 @@ download_wall_probe:
     DEP_PACKAGE_VERSION: ${WALLPROBE_VERSION}
     DEP_SO_PATH: "${WALLPROBE_PACKAGENAME}"
 
+download_reacting_wall:
+  extends: .download-template
+  variables:
+    DEP_PACKAGE_NAME: ${REACTINGWALL_PACKAGENAME}
+    DEP_PACKAGE_URL: ${REACTINGWALL_PACKAGE_REGISTRY_URL}
+    DEP_PACKAGE_VERSION: ${REACTINGWALL_VERSION}
+    DEP_SO_PATH: "${REACTINGWALL_PACKAGENAME}"
+
 download_tne:
   extends: .download-template
   variables:
