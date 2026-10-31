@@ -236,7 +236,7 @@ def main():
   cylinder.SetRegressionCase("cylinder")
   cylinder.SetRunDirectory("cylinder")
   cylinder.SetNumberOfProcessors(maxProcs)
-  cylinder.SetNumberOfIterations(1000)
+  cylinder.SetNumberOfIterations(6000)
   truthData = {os.path.join("output", "resid.dat"): [277.9847418, 12132248860.0, 1583868.494],
                "wprobe1.dat" : [9111.4937460191, 5746631.5817209]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
@@ -254,7 +254,7 @@ def main():
   cylinder_radeq.SetRegressionCase("cylinder")
   cylinder_radeq.SetRunDirectory("cylinder_radeq")
   cylinder_radeq.SetNumberOfProcessors(maxProcs)
-  cylinder_radeq.SetNumberOfIterations(2000)
+  cylinder_radeq.SetNumberOfIterations(6000)
   truthData = {os.path.join("output", "resid.dat"): [22.66945033, 2682973525.0, 626032.0],
                "wprobe1.dat" : [10011.121853998, 2455.4818003874, 1225019.3615968]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
