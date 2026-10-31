@@ -211,15 +211,15 @@ namespace chem {
     $u_slip_lag{n+1} = $u_f{n,it};
   }
 
-  $type kconduct_f_lag store<real>;
-  $rule pointwise(slip::kconduct_f_lag{n = 0} <- area), 
+  $type kcond_f_lag store<real>;
+  $rule pointwise(kcond_f_lag{n = 0} <- area), 
      constraint(viscousWall_BC, ref->slip_BCoption) {
-    $kconduct_f_lag{n = 0} = 1e-5;
+    $kcond_f_lag{n = 0} = 1e-5;
   }
-  $rule pointwise(slip::kconduct_f_lag{n + 1} <- kconduct_f{n, it}, kconduct_f_lag{n}),
+  $rule pointwise(kcond_f_lag{n + 1} <- kconduct_f{n, it}, kcond_f_lag{n}),
       constraint(viscousWall_BC, ref->slip_BCoption),
       conditional(newton_finished{n, it}) {
-    $kconduct_f_lag{n + 1} = $kconduct_f{n, it};
+    $kcond_f_lag{n + 1} = $kconduct_f{n, it};
   }
 
   $type nonequilibrium_on Constraint;
@@ -379,12 +379,12 @@ namespace chem {
 
   // compute temperature slip distance from lagged properties of gas at wall
   $type T_slip_dist store<real>;
-  $rule pointwise(slip::T_slip_dist <- Pambient, mixture_f_lag, kconduct_f_lag,
+  $rule pointwise(slip::T_slip_dist <- Pambient, mixture_f_lag, kcond_f_lag,
                   ci->gaugePressure, T_slip_lag, sigma_T_slip, eos),
       constraint(ref->slip_BCoption) {
     const auto p = $ci->$gaugePressure + $Pambient;
     $T_slip_dist = compute_T_slip_dist($sigma_T_slip, $mixture_f_lag, p,
-                                       $T_slip_lag, $kconduct_f_lag, $eos);
+                                       $T_slip_lag, $kcond_f_lag, $eos);
   }
 
   // ---------------------------------------------------------------------
@@ -602,6 +602,30 @@ namespace chem {
     join($qdot_add_seb, 0.0);
   }
 
+  // add terms for reacting walls
+  $type qdot_c store<real>;
+  $rule apply(qdot_add_seb <- qdot_c)[Loci::Summation],
+      constraint(ref->slip_BCoption, yesReactingOrChar) {
+    join($qdot_add_seb, -$qdot_c);
+  }
+  $type qdot_g store<real>;
+  $rule apply(qdot_add_seb <- qdot_g)[Loci::Summation],
+      constraint(ref->slip_BCoption, yesReactingOrChar) {
+    join($qdot_add_seb, -$qdot_g);
+  }
+  $type qdot_w store<real>;
+  $rule apply(qdot_add_seb <- qdot_w)[Loci::Summation],
+      constraint(ref->slip_BCoption, yesReactingOrChar) {
+    join($qdot_add_seb, $qdot_w);
+  }
+  $type qdot_reactive store<real>;
+  $type specifyMassFlux_BCoption Constraint;  
+  $rule apply(qdot_add_seb <- qdot_reactive)[Loci::Summation],
+      constraint(yesReactingOrChar, thermal_equilibrium_slip,
+                 ref->specifyMassFlux_BCoption) {
+    join($qdot_add_seb, $qdot_reactive);
+  }
+
   // include the diffusive heat flux in the surface energy balance
   $type AllDiffusionBCs Constraint;
   $type diff_energy store<real>;
@@ -624,7 +648,7 @@ namespace chem {
 
   $type Tambient_BC store<real>;
   $type emissivity store<real>;
-  $rule pointwise(slip::Twall <- ci->(temperature, cellcenter), kconduct_f_lag,
+  $rule pointwise(slip::reacting::Twall <- ci->(temperature, cellcenter), kcond_f_lag,
                   facecenter, area, ref->(emissivity, Tambient_BC),
                   qdot_add_seb_lag, T_slip_dist),
       constraint(thermal_equilibrium_slip, ref->radiativeAdiabatic_BCoption, 
@@ -634,7 +658,7 @@ namespace chem {
     // surface emissivity
     const real epsilon = $ref->$emissivity;
     // fluid thermal conductivity
-    const real kt = $kconduct_f_lag;
+    const real kt = $kcond_f_lag;
     // gas temperature above wall
     const real Ti = $ci->$temperature;
     const real Tambient = $ref->$Tambient_BC;
@@ -648,17 +672,17 @@ namespace chem {
   // let adiabatic wall account for slip
   
   $type qdot_aux store<real>;
-  $rule pointwise(slip::qdot_aux <- qdot_add_seb_lag),
-      constraint(ref->slip_BCoption, thermal_equilibrium_slip) {
+  $rule pointwise(slip::reacting::qdot_aux <- qdot_add_seb_lag),
+      constraint(ref->slip_BCoption, thermal_equilibrium_slip, noReactingOrChar) {
     $qdot_aux = $qdot_add_seb_lag;
   }
 
   // wall temperature for adiabatic or prescribed heat flux viscous walls
   $rule pointwise(slip::Twall <- ci->(cellcenter, temperature), area,
-                facecenter, qwall, qdot_aux, kconduct_f_lag, T_slip_dist),
+                facecenter, qwall, qdot_aux, kcond_f_lag, T_slip_dist),
     constraint(ref->slip_BCoption, thermal_equilibrium_slip) {
     const real dx = dot(($facecenter - $ci->$cellcenter), $area.n);
-    const real ktdx = $kconduct_f_lag / (dx + $T_slip_dist);
+    const real ktdx = $kcond_f_lag / (dx + $T_slip_dist);
     // compute temperature that would result in  specified heat flux
     $Twall = (-($qwall + $qdot_aux) + ktdx * $ci->$temperature) / ktdx;
   }
