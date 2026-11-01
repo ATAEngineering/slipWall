@@ -17,29 +17,29 @@
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
 
 variables:
-  GCC_VERSION: 13
+  GCC_VERSION: 14
   MODULE_NAME: 'slipWall'
-  BUILD_IMAGE: "$CI_REGISTRY/containers/chem:4.0-p11-gcc${GCC_VERSION}"
+  BUILD_IMAGE: "${HARBOR_REGISTRY}/ata-containers/chem:4.1.0-gcc${GCC_VERSION}"
   VERSION: ${CI_COMMIT_TAG}
   SLIPWALL_INSTALL_PACKAGE: "${MODULE_NAME}-${VERSION}"
   PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${MODULE_NAME}/${VERSION}"
   TNE_PACKAGENAME: "tne"
-  TNE_VERSION: "1.4.14"
+  TNE_VERSION: "1.5.0"
   TNE_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${TNE_PACKAGENAME}/packages/generic/${TNE_PACKAGENAME}/${TNE_VERSION}"
   PLASMA_PACKAGENAME: "plasma"
-  PLASMA_VERSION: "1.3.11"
+  PLASMA_VERSION: "1.4.0"
   PLASMA_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${PLASMA_PACKAGENAME}/packages/generic/${PLASMA_PACKAGENAME}/${PLASMA_VERSION}"
   REACTINGWALL_PACKAGENAME: "reactingWall"
-  REACTINGWALL_VERSION: "2.2.0"
+  REACTINGWALL_VERSION: "2.4.0"
   REACTINGWALL_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${REACTINGWALL_PACKAGENAME}/packages/generic/${REACTINGWALL_PACKAGENAME}/${REACTINGWALL_VERSION}"
   WALLPROBE_PACKAGENAME: "wallProbe"
-  WALLPROBE_VERSION: "1.0.5"
+  WALLPROBE_VERSION: "1.0.6"
   WALLPROBE_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${WALLPROBE_PACKAGENAME}/packages/generic/${WALLPROBE_PACKAGENAME}/${WALLPROBE_VERSION}"
   GLOBALTIMESTEPPING_PACKAGENAME: "globalTimeStepping"
-  GLOBALTIMESTEPPING_VERSION: "1.0.5"
+  GLOBALTIMESTEPPING_VERSION: "1.0.7"
   GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/loci-chem%2F${GLOBALTIMESTEPPING_PACKAGENAME}/packages/generic/${GLOBALTIMESTEPPING_PACKAGENAME}/${GLOBALTIMESTEPPING_VERSION}"
   MAGIC_PACKAGENAME: "magic"
-  MAGIC_VERSION: "0.3.2"
+  MAGIC_VERSION: "0.3.8"
   MAGIC_PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/multiphysics-engine%2F${MAGIC_PACKAGENAME}/packages/generic/${MAGIC_PACKAGENAME}/${MAGIC_VERSION}"
   MAX_PROCS: "4"
 
@@ -54,130 +54,159 @@ stages:          # List of stages for jobs, and their order of execution
   - upload
   - release
 
-build_module_openmpi:
+.build-template:
   stage: build
-  image: "${BUILD_IMAGE}-openmpi"  
+  image: "${BUILD_IMAGE}-${MPI_FLAVOR}"  
+  before_script:
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}/.git
   script:
     - whoami
     - pwd
     - ls -lh
     - env
-    - git config --global --add safe.directory `pwd`
     - scl enable gcc-toolset-${GCC_VERSION} 'bash ci/build_module ${MAX_PROCS}'
+    - if [[ "${MPI_FLAVOR}" == "mpich" ]]; then mv ${MODULE_NAME}_m.so ${MODULE_NAME}_mpich_m.so; fi
   # Use artifacts to return logs and other files to GitLab (if necessary)
   artifacts:
     paths:
-      - slipWall_m.so
+      - ./*.so
       - version.hpp
+
+build_module_openmpi:
+  extends: .build-template
+  variables:
+    MPI_FLAVOR: "openmpi"
 
 build_module_mpich:
-  stage: build
-  image: "${BUILD_IMAGE}-mpich"  
-  script:
-    - whoami
-    - pwd
-    - ls -lh
-    - env
-    - git config --global --add safe.directory `pwd`
-    - scl enable gcc-toolset-${GCCVERSION} 'bash ci/build_module ${MAX_CPUS}'
-    - mv slipWall_m.so slipWall_mpich_m.so
-  # Use artifacts to return logs and other files to GitLab (if necessary)
-  artifacts:
-    paths:
-      - slipWall_mpich_m.so
-      - version.hpp
+  extends: .build-template
+  variables:
+    MPI_FLAVOR: "mpich"
 
-download_modules:
+# ----------------------------------------------------------------------------------
+.download-template:
   stage: download
-  image: "${BUILD_IMAGE}-openmpi"  
+  image: "${BUILD_IMAGE}-openmpi"
+  before_script:
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}/.git
   script:
-    - echo ${GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL} ${GLOBALTIMESTEPPING_PACKAGENAME}
-    - echo ${WALLPROBE_PACKAGE_REGISTRY_URL} ${WALLPROBE_PACKAGENAME}
-    - echo ${TNE_PACKAGE_REGISTRY_URL} ${TNE_PACKAGENAME}
-    - echo ${PLASMA_PACKAGE_REGISTRY_URL} ${PLASMA_PACKAGENAME}
-    - echo ${REACTINGWALL_PACKAGE_REGISTRY_URL} ${REACTINGWALL_PACKAGENAME} ${REACTINGWALL_VERSION}
-    - echo ${MAGIC_PACKAGE_REGISTRY_URL} ${MAGIC_PACKAGENAME} ${MAGIC_VERSION}
-    - GLOBALTIMESTEPPING_TARBALL=${GLOBALTIMESTEPPING_PACKAGENAME}-${GLOBALTIMESTEPPING_VERSION}-build-openmpi.tar.gz    
-    - WALLPROBE_TARBALL=${WALLPROBE_PACKAGENAME}-${WALLPROBE_VERSION}-build-openmpi.tar.gz
-    - TNE_TARBALL=${TNE_PACKAGENAME}-${TNE_VERSION}-build-openmpi.tar.gz
-    - PLASMA_TARBALL=${PLASMA_PACKAGENAME}-${PLASMA_VERSION}-build-openmpi.tar.gz
-    - REACTINGWALL_TARBALL=${REACTINGWALL_PACKAGENAME}-${REACTINGWALL_VERSION}-build-openmpi.tar.gz
-    - MAGIC_TARBALL=${MAGIC_PACKAGENAME}-${MAGIC_VERSION}-build.tar.gz
-    - mkdir modules
+    - echo "${DEP_PACKAGE_URL} ${DEP_PACKAGE_NAME} ${DEP_PACKAGE_VERSION}"
+    - DEP_TARBALL=${DEP_PACKAGE_NAME}-${DEP_PACKAGE_VERSION}-build-openmpi.tar.gz  
+    - if [[ -n "${DEP_NO_MPI}" ]]; then DEP_TARBALL=${DEP_PACKAGE_NAME}-${DEP_PACKAGE_VERSION}-build.tar.gz; fi
+    - mkdir -p modules
     - cd modules
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL}/${GLOBALTIMESTEPPING_TARBALL}'
-    - tar zxvf ${GLOBALTIMESTEPPING_TARBALL}
-    - mv ${GLOBALTIMESTEPPING_PACKAGENAME}/*.so .
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${WALLPROBE_PACKAGE_REGISTRY_URL}/${WALLPROBE_TARBALL}'
-    - tar zxvf ${WALLPROBE_TARBALL}
-    - mv ${WALLPROBE_PACKAGENAME}/*.so .
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${TNE_PACKAGE_REGISTRY_URL}/${TNE_TARBALL}'
-    - tar zxvf ${TNE_TARBALL}
-    - mv ${TNE_PACKAGENAME}/lib/*.so .
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${PLASMA_PACKAGE_REGISTRY_URL}/${PLASMA_TARBALL}'
-    - tar zxvf ${PLASMA_TARBALL}
-    - mv ${PLASMA_PACKAGENAME}/lib/*.so .
-    - mv ${PLASMA_PACKAGENAME}/collisionIntegrals .
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${REACTINGWALL_PACKAGE_REGISTRY_URL}/${REACTINGWALL_TARBALL}'
-    - tar zxvf ${REACTINGWALL_TARBALL}
-    - mv ${REACTINGWALL_PACKAGENAME}/*.so .
-    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${MAGIC_PACKAGE_REGISTRY_URL}/${MAGIC_TARBALL}'
-    - tar zxvf ${MAGIC_TARBALL}
-    - mv magic-${MAGIC_VERSION} magic
+    - 'wget --header="JOB-TOKEN: $CI_JOB_TOKEN" ${DEP_PACKAGE_URL}/${DEP_TARBALL}'
+    - tar zxvf ${DEP_TARBALL}
+    - if [[ -n "${DEP_SO_PATH}" ]]; then mv ${DEP_SO_PATH}/*.so .; fi
     - ls -lh
+    - cd ..
   artifacts:
     paths:
-      - modules/globalTimeStepping_m.so
-      - modules/wallProbe_m.so
-      - modules/tne_m.so
-      - modules/plasma_m.so
+      - modules/*.so
       - modules/collisionIntegrals
-      - modules/reactingWall_m.so
       - modules/magic
 
+download_global_time_stepping:
+  extends: .download-template
+  variables:
+    DEP_PACKAGE_NAME: ${GLOBALTIMESTEPPING_PACKAGENAME}
+    DEP_PACKAGE_URL: ${GLOBALTIMESTEPPING_PACKAGE_REGISTRY_URL}
+    DEP_PACKAGE_VERSION: ${GLOBALTIMESTEPPING_VERSION}
+    DEP_SO_PATH: "${GLOBALTIMESTEPPING_PACKAGENAME}"
+
+download_wall_probe:
+  extends: .download-template
+  variables:
+    DEP_PACKAGE_NAME: ${WALLPROBE_PACKAGENAME}
+    DEP_PACKAGE_URL: ${WALLPROBE_PACKAGE_REGISTRY_URL}
+    DEP_PACKAGE_VERSION: ${WALLPROBE_VERSION}
+    DEP_SO_PATH: "${WALLPROBE_PACKAGENAME}"
+
+download_reacting_wall:
+  extends: .download-template
+  variables:
+    DEP_PACKAGE_NAME: ${REACTINGWALL_PACKAGENAME}
+    DEP_PACKAGE_URL: ${REACTINGWALL_PACKAGE_REGISTRY_URL}
+    DEP_PACKAGE_VERSION: ${REACTINGWALL_VERSION}
+    DEP_SO_PATH: "${REACTINGWALL_PACKAGENAME}"
+
+download_tne:
+  extends: .download-template
+  variables:
+    DEP_PACKAGE_NAME: ${TNE_PACKAGENAME}
+    DEP_PACKAGE_URL: ${TNE_PACKAGE_REGISTRY_URL}
+    DEP_PACKAGE_VERSION: ${TNE_VERSION}
+    DEP_SO_PATH: "${TNE_PACKAGENAME}/lib"
+
+download_plasma:
+  extends: .download-template
+  variables:
+    DEP_PACKAGE_NAME: ${PLASMA_PACKAGENAME}
+    DEP_PACKAGE_URL: ${PLASMA_PACKAGE_REGISTRY_URL}
+    DEP_PACKAGE_VERSION: ${PLASMA_VERSION}
+    DEP_SO_PATH: "${PLASMA_PACKAGENAME}/lib"
+  after_script:
+    - mv modules/${PLASMA_PACKAGENAME}/collisionIntegrals modules/
+
+download_magic:
+  extends: .download-template
+  variables:
+    DEP_PACKAGE_NAME: ${MAGIC_PACKAGENAME}
+    DEP_PACKAGE_URL: ${MAGIC_PACKAGE_REGISTRY_URL}
+    DEP_PACKAGE_VERSION: ${MAGIC_VERSION}
+    DEP_NO_MPI: "none"
+  after_script:
+    - mv modules/${MAGIC_PACKAGENAME}-${MAGIC_VERSION} modules/${MAGIC_PACKAGENAME}
+
+# ----------------------------------------------------------------------------------
 test-regression:
   stage: test
   image: "${BUILD_IMAGE}-openmpi"  
+  before_script:
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}/.git
   script:
     - whoami
     - ls -lh
     - env
     - scl enable gcc-toolset-${GCCVERSION} 'bash ci/run_regression_tests ${MAX_PROCS}'
 
-
+# ----------------------------------------------------------------------------------
 # This will upload a tarball with the CHAR install to the package registry, but only when changes are merged into main
 # See: https://docs.gitlab.com/ee/user/project/releases/release_fields.html#release-assets
-upload_package_openmpi:
+.upload-template:
   stage: upload
-  image: "${BUILD_IMAGE}-openmpi"  
+  image: "${BUILD_IMAGE}-${MPI_FLAVOR}"  
+  before_script:
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}/.git
   rules:
     # only run job if tag created with just a version number
     - if: $CI_COMMIT_TAG =~ /\d+/
   script:
     - |
-      MPI_FLAVOR="openmpi"
-      mkdir slipWall
-      cp slipWall_m.so slipWall/
-      tar zcvf ${SLIPWALL_INSTALL_PACKAGE}-build-${MPI_FLAVOR}.tar.gz slipWall
+      mkdir ${MODULE_NAME}
+      if [[ "${MPI_FLAVOR}"" == "mpich" ]]; then
+        cp ${MODULE_NAME}_mpich_m.so ${MODULE_NAME}/${MODULE_NAME}_m.so
+      else
+        cp ${MODULE_NAME}_m.so ${MODULE_NAME}/
+      fi
+      tar zcvf ${SLIPWALL_INSTALL_PACKAGE}-build-${MPI_FLAVOR}.tar.gz ${MODULE_NAME}
       ls -lh
       echo $PACKAGE_REGISTRY_URL
       curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ${SLIPWALL_INSTALL_PACKAGE}-build-${MPI_FLAVOR}.tar.gz "${PACKAGE_REGISTRY_URL}/${SLIPWALL_INSTALL_PACKAGE}-build-${MPI_FLAVOR}.tar.gz"
 
+
+upload_package_openmpi:
+  extends: .upload-template
+  variables:
+    MPI_FLAVOR: "openmpi"
+
 upload_package_mpich:
-  stage: upload
-  image: "${BUILD_IMAGE}-mpich"  
-  rules:
-    # only run job if tag created with just a version number
-    - if: $CI_COMMIT_TAG =~ /\d+/
-  script:
-    - |
-      MPI_FLAVOR="mpich"
-      mkdir slipWall
-      cp slipWall_mpich_m.so slipWall/
-      tar zcvf ${SLIPWALL_INSTALL_PACKAGE}-build-${MPI_FLAVOR}.tar.gz slipWall
-      ls -lh
-      echo $PACKAGE_REGISTRY_URL
-      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ${SLIPWALL_INSTALL_PACKAGE}-build-${MPI_FLAVOR}.tar.gz "${PACKAGE_REGISTRY_URL}/${SLIPWALL_INSTALL_PACKAGE}-build-${MPI_FLAVOR}.tar.gz"
+  extends: .upload-template
+  variables:
+    MPI_FLAVOR: "mpich"
 
 upload_distribution:
   stage: upload
@@ -204,11 +233,14 @@ upload_distribution:
       echo $PACKAGE_REGISTRY_URL
       curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ${MODULE_NAME}-${VERSION}.tar.gz "${PACKAGE_REGISTRY_URL}/${MODULE_NAME}-${VERSION}.tar.gz"      
 
-
+# ----------------------------------------------------------------------------------
 # This will create a release when main is tagged with a version number
 release_job:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
+  before_script:
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}
+    - git config --global --add safe.directory ${CI_PROJECT_DIR}/.git
   rules:
     - if: $CI_COMMIT_TAG =~ /\d+/  # only run this job if a tag is created with just a version number
   script:
