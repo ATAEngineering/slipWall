@@ -217,9 +217,9 @@ def main():
   double_cone.SetRunDirectory("double_cone")
   double_cone.SetNumberOfProcessors(maxProcs)
   double_cone.SetNumberOfIterations(200)
-  truthData = {os.path.join("output", "resid.dat"): [546.5013941, 3125297829.0, 651990.8413],
-               os.path.join("output", "ev_resid.dat"): [31603106.68],
-               "wprobe1.dat" : [771.67988052805, 191048.89831058]}
+  truthData = {os.path.join("output", "resid.dat"): [369.8298599, 1219616814.0, 369117.649],
+               os.path.join("output", "ev_resid.dat"): [2080470.528],
+               "wprobe1.dat" : [811.82206404659, 375263.61190072]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        os.path.join("output", "ev_resid.dat"): [1],
                        "wprobe1.dat": [2, 4]}
@@ -237,8 +237,8 @@ def main():
   cylinder.SetRunDirectory("cylinder")
   cylinder.SetNumberOfProcessors(maxProcs)
   cylinder.SetNumberOfIterations(6000)
-  truthData = {os.path.join("output", "resid.dat"): [277.9847418, 12132248860.0, 1583868.494],
-               "wprobe1.dat" : [9111.4937460191, 5746631.5817209]}
+  truthData = {os.path.join("output", "resid.dat"): [2.170379968, 99757046.91, 1855.528264],
+               "wprobe1.dat" : [10404.25730262, 2124263.5566318]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        "wprobe1.dat": [2, 4]}
   cylinder.SetTruthData(truthData, truthDataLocation)
@@ -255,8 +255,8 @@ def main():
   cylinder_radeq.SetRunDirectory("cylinder_radeq")
   cylinder_radeq.SetNumberOfProcessors(maxProcs)
   cylinder_radeq.SetNumberOfIterations(6000)
-  truthData = {os.path.join("output", "resid.dat"): [22.66945033, 2682973525.0, 626032.0],
-               "wprobe1.dat" : [10011.121853998, 2455.4818003874, 1225019.3615968]}
+  truthData = {os.path.join("output", "resid.dat"): [1.991253024, 105216817.0, 2109.406803],
+               "wprobe1.dat" : [10352.504376487, 2110.1596501178, 744768.51668495]}
   truthDataLocation = {os.path.join("output", "resid.dat"): [1, 2, 3],
                        "wprobe1.dat": [2, 3, 4]}
   cylinder_radeq.SetTruthData(truthData, truthDataLocation)
